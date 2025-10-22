@@ -1,0 +1,12 @@
+# Ignore everything by default
+/*
+/local/modcustomfields
+
+# Keep this file itself
+!.gitignore
+
+# Keep the local folder
+!local/
+
+# Keep only analyticsservices plugin
+!local/analyticsservices/**
