@@ -57,6 +57,8 @@ class get_uncompetent_activities extends external_api
                 ON cm.module = m.id
                 AND cm.instance = gi.iteminstance
                 AND cm.course = gi.courseid
+                AND cm.visible = 1
+                AND cm.deletioninprogress = 0
             WHERE gi.courseid = :courseid
                 AND gi.itemtype = 'mod'
                 AND gi.itemmodule IS NOT NULL",

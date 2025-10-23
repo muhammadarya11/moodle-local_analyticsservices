@@ -51,12 +51,16 @@ class get_graded_course_activities extends external_api
                        gi.itemmodule,
                        gi.iteminstance,
                        COUNT(DISTINCT g.userid) AS gradedcount
-                  FROM {grade_items} gi
-             LEFT JOIN {grade_grades} g ON g.itemid = gi.id AND g.finalgrade IS NOT NULL
-                 WHERE gi.courseid = :courseid
-                   AND gi.itemtype = 'mod'
-              GROUP BY gi.id, gi.itemname, gi.itemmodule, gi.iteminstance
-              ORDER BY gi.itemmodule, gi.itemname";
+                FROM {grade_items} gi
+                JOIN {modules} m ON m.name = gi.itemmodule
+                JOIN {course_modules} cm ON cm.module = m.id
+                    AND cm.instance = gi.iteminstance
+                    AND cm.deletioninprogress = 0
+                LEFT JOIN {grade_grades} g ON g.itemid = gi.id AND g.finalgrade IS NOT NULL
+                    WHERE gi.courseid = :courseid
+                    AND gi.itemtype = 'mod'
+                GROUP BY gi.id, gi.itemname, gi.itemmodule, gi.iteminstance
+                ORDER BY gi.itemmodule, gi.itemname";
 
         $records = $DB->get_records_sql($sql, ['courseid' => $courseid]);
 

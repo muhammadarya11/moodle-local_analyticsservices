@@ -47,7 +47,10 @@ class get_students_never_attempted_tasks extends external_api
             "SELECT cm.id AS cmid, gi.itemmodule AS modname
              FROM {grade_items} gi
              JOIN {modules} m ON m.name = gi.itemmodule
-             JOIN {course_modules} cm ON cm.module = m.id AND cm.course = gi.courseid
+             JOIN {course_modules} cm ON cm.module = m.id 
+                AND cm.course = gi.courseid
+                AND cm.visible = 1
+                AND cm.deletioninprogress = 0
              WHERE gi.courseid = :courseid
                AND gi.itemtype = 'mod'
                AND gi.itemmodule IS NOT NULL",

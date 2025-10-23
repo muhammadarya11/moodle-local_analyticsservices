@@ -57,4 +57,13 @@ $functions = [
         'loginrequired' => true,
         'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE]
     ],
+    'local_services_get_students_competent_percentage' => [
+        'classname'   => 'local_analyticsservices\\external\\get_students_competent_percentage',
+        'methodname'  => 'execute',
+        'description' => 'Get students competent percentage',
+        'type'        => 'read',
+        'ajax'        => true,
+        'loginrequired' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE]
+    ],
 ];
