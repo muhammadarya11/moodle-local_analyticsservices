@@ -44,12 +44,8 @@ class get_course_access_by_timeperiod extends external_api
 
         // Ambil log "viewed" untuk course terkait.
         $records = $DB->get_records_sql(
-            "
-            SELECT id, userid, timecreated
-            FROM {logstore_standard_log}
-            WHERE courseid = :courseid
-              AND action = :action
-            ",
+            "SELECT id, userid, timecreated FROM {logstore_standard_log}
+            WHERE courseid = :courseid AND action = :action",
             [
                 'courseid' => $courseid,
                 'action' => 'viewed'

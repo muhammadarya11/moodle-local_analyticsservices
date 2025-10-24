@@ -40,27 +40,23 @@ class get_course_access_by_ipgroup extends external_api
         // Hanya event course yang relevan (course viewed dan activity viewed).
         if ($unique_by_user) {
             // Mode: hitung user unik per IP
-            $sql = "
-                SELECT ip, COUNT(DISTINCT userid) AS totalaccess
+            $sql = "SELECT ip, COUNT(DISTINCT userid) AS totalaccess
                 FROM {logstore_standard_log}
                 WHERE courseid = :courseid
-                  AND ip IS NOT NULL
-                  AND userid > 0
-                  AND action = 'viewed'
+                    AND ip IS NOT NULL
+                    AND userid > 0
+                    AND action = 'viewed'
                 GROUP BY ip
-                ORDER BY totalaccess DESC
-            ";
+                ORDER BY totalaccess DESC";
         } else {
             // Mode: hitung total log (tanpa unique user)
-            $sql = "
-                SELECT ip, COUNT(id) AS totalaccess
+            $sql = "SELECT ip, COUNT(id) AS totalaccess
                 FROM {logstore_standard_log}
                 WHERE courseid = :courseid
-                  AND ip IS NOT NULL
-                  AND action = 'viewed'
+                    AND ip IS NOT NULL
+                    AND action = 'viewed'
                 GROUP BY ip
-                ORDER BY totalaccess DESC
-            ";
+                ORDER BY totalaccess DESC";
         }
 
         $records = $DB->get_records_sql($sql, ['courseid' => $courseid]);
