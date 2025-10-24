@@ -9,6 +9,8 @@ use core_external\external_single_structure;
 use core_external\external_value;
 use context_course;
 
+use local_analyticsservices\helper;
+
 defined('MOODLE_INTERNAL') || die();
 
 class get_students_never_attempted_tasks extends external_api
@@ -31,11 +33,8 @@ class get_students_never_attempted_tasks extends external_api
         $context = context_course::instance($courseid);
         self::validate_context($context);
 
-        // Get student role id
-        $studentroleid = $DB->get_field('role', 'id', ['shortname' => 'student'], IGNORE_MISSING);
-        if (!$studentroleid) $studentroleid = 5;
+        $students = helper::get_students_in_course($courseid);
 
-        $students = get_role_users($studentroleid, $context);
         if (empty($students)) {
             return ['students' => []];
         }

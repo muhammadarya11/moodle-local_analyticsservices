@@ -4,13 +4,13 @@ namespace local_analyticsservices\external;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
-use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
 use context_course;
 
-defined('MOODLE_INTERNAL') || die();
+use local_analyticsservices\helper;
 
+defined('MOODLE_INTERNAL') || die();
 
 class get_students_competent_percentage extends external_api
 {
@@ -40,11 +40,8 @@ class get_students_competent_percentage extends external_api
         // Get Course Data
         $course = $DB->get_record('course', ['id' => $params['courseid']], 'id, fullname, shortname', MUST_EXIST);
 
-        // Get student role id dan daftar student yang enroll di course tersebut
-        $studentroleid = $DB->get_field('role', 'id', ['shortname' => 'student'], IGNORE_MISSING);
-        if (!$studentroleid) $studentroleid = 5;
-
-        $students = get_role_users($studentroleid, $context);
+        // Get student data
+        $students = helper::get_students_in_course($courseid);
         if (empty($students)) {
             return ['course' => [
                 'id' => $course->id,

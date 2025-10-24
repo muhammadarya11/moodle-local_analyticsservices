@@ -9,6 +9,8 @@ use core_external\external_single_structure;
 use core_external\external_value;
 use context_course;
 
+use local_analyticsservices\helper;
+
 defined('MOODLE_INTERNAL') || die();
 
 class get_uncompetent_activities extends external_api
@@ -34,11 +36,7 @@ class get_uncompetent_activities extends external_api
         $context = context_course::instance($courseid);
         self::validate_context($context);
 
-        // Get student role id
-        $studentroleid = $DB->get_field('role', 'id', ['shortname' => 'student'], IGNORE_MISSING);
-        if (!$studentroleid) $studentroleid = 5;
-
-        $students = get_role_users($studentroleid, $context);
+        $students = helper::get_students_in_course($courseid);
         if (empty($students)) {
             return ['activities' => []];
         }

@@ -9,6 +9,7 @@ use core_external\external_single_structure;
 use core_external\external_value;
 use context_course;
 
+use local_analyticsservices\helper;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -32,12 +33,13 @@ class get_course_module_access_percentage extends external_api
         $context = context_course::instance($courseid);
         self::validate_context($context);
 
+        // Get Course Data
         $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname', MUST_EXIST);
 
-        $students = get_role_users(5, $context);
+        // Get Data Mahasiswa yang enroll di course ini
+        $students = helper::get_students_in_course($courseid);
         $studentids = array_map(fn($s) => (int)$s->id, $students);
         $totalstudents = count($studentids);
-
 
         if ($totalstudents === 0) {
             return [

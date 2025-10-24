@@ -9,6 +9,7 @@ use core_external\external_single_structure;
 use core_external\external_value;
 use context_course;
 
+use local_analyticsservices\helper;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -36,8 +37,8 @@ class get_graded_course_activities extends external_api
         $context = context_course::instance($courseid);
         self::validate_context($context);
 
-        // Ambil semua user yang terdaftar (biasanya mahasiswa).
-        $students = get_enrolled_users($context, 'mod/assign:submit');
+        // Ambil data mahasiswa yang enroll di course ini.
+        $students = helper::get_students_in_course($courseid);
         $totalstudents = count($students);
 
         // Kalau tidak ada mahasiswa, return kosong.
