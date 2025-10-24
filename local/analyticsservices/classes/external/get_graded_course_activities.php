@@ -56,6 +56,7 @@ class get_graded_course_activities extends external_api
                 JOIN {course_modules} cm ON cm.module = m.id
                     AND cm.instance = gi.iteminstance
                     AND cm.deletioninprogress = 0
+                    AND cm.visible = 1
                 LEFT JOIN {grade_grades} g ON g.itemid = gi.id AND g.finalgrade IS NOT NULL
                     WHERE gi.courseid = :courseid
                     AND gi.itemtype = 'mod'

@@ -52,7 +52,9 @@ class get_course_module_access_percentage extends external_api
         $sql = "SELECT cm.id AS cmid, cm.instance, m.name AS modname 
         FROM {course_modules} cm
         JOIN {modules} m ON m.id = cm.module 
-        WHERE cm.course = :courseid";
+        WHERE cm.course = :courseid
+        AND cm.deletioninprogress = 0
+        AND cm.visible = 1";
 
         $modules = $DB->get_records_sql($sql, ['courseid' => $courseid]);
 
