@@ -22,7 +22,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version = 2025100909;
+$plugin->version = 2025100913;
 $plugin->requires = 2022041900.00; // Requires Moodle 4.0.
 $plugin->component = 'local_analyticsservices';
 $plugin->maturity = MATURITY_BETA;

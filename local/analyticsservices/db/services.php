@@ -66,4 +66,15 @@ $functions = [
         'loginrequired' => true,
         'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE]
     ],
+
+    // Function untuk section
+    'local_services_get_course_modules_info_by_section' => [
+        'classname'   => 'local_analyticsservices\\external\\section\\get_course_modules_info_by_section',
+        'methodname'  => 'execute',
+        'description' => 'Get course modules info by section',
+        'type'        => 'read',
+        'ajax'        => true,
+        'loginrequired' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE]
+    ],
 ];
