@@ -29,4 +29,9 @@ class helper
 
         return $students ?: [];
     }
+
+    public static function get_log_table_name(): string
+    {
+        global $DB;
+    }
 }

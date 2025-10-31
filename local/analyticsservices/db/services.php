@@ -77,4 +77,31 @@ $functions = [
         'loginrequired' => true,
         'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE]
     ],
+    'local_services_get_quiz_attempt_frequency_by_section' => [
+        'classname'   => 'local_analyticsservices\\external\\section\\get_quiz_attempt_frequency_by_section',
+        'methodname'  => 'execute',
+        'description' => 'Get quiz attempt frequency by section',
+        'type'        => 'read',
+        'ajax'        => true,
+        'loginrequired' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE]
+    ],
+    'local_services_get_quiz_attempt_average_time' => [
+        'classname'   => 'local_analyticsservices\\external\\section\\get_quiz_attempt_average_time_by_section',
+        'methodname'  => 'execute',
+        'description' => 'Get quiz attempt average time by section',
+        'type'        => 'read',
+        'ajax'        => true,
+        'loginrequired' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE]
+    ],
+    'local_services_get_grade_distribution_by_section' => [
+        'classname'   => 'local_analyticsservices\\external\\section\\get_grade_distribution_by_section',
+        'methodname'  => 'execute',
+        'description' => 'Get grade distribution by section',
+        'type'        => 'read',
+        'ajax'        => true,
+        'loginrequired' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE]
+    ],
 ];
