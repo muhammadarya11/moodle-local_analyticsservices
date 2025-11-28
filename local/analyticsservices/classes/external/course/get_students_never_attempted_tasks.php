@@ -1,6 +1,6 @@
 <?php
 
-namespace local_analyticsservices\external;
+namespace local_analyticsservices\external\course;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
@@ -33,6 +33,8 @@ class get_students_never_attempted_tasks extends external_api
         $context = context_course::instance($courseid);
         self::validate_context($context);
 
+        $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname', MUST_EXIST);
+
         $students = helper::get_students_in_course($courseid);
 
         if (empty($students)) {
@@ -57,7 +59,14 @@ class get_students_never_attempted_tasks extends external_api
         );
 
         if (empty($modules)) {
-            return ['students' => []];
+            return [
+                'course' => [
+                    'id' => $course->id,
+                    'fullname' => $course->fullname,
+                    'shortname' => $course->shortname,
+                    'students' => []
+                ],
+            ];
         }
 
         $cmids = array_keys($modules);
@@ -94,7 +103,14 @@ class get_students_never_attempted_tasks extends external_api
             ];
         }
 
-        return ['students' => $results];
+        return [
+            'course' => [
+                'id' => $course->id,
+                'fullname' => $course->fullname,
+                'shortname' => $course->shortname,
+                'students' => $results
+            ],
+        ];
     }
 
     /**
@@ -103,16 +119,21 @@ class get_students_never_attempted_tasks extends external_api
     public static function execute_returns()
     {
         return new external_single_structure([
-            'students' => new external_multiple_structure(
-                new external_single_structure([
-                    'id' => new external_value(PARAM_INT, 'User ID'),
-                    'username' => new external_value(PARAM_TEXT, 'Username'),
-                    'firstname' => new external_value(PARAM_TEXT, 'First name'),
-                    'lastname' => new external_value(PARAM_TEXT, 'Last name'),
-                    'email' => new external_value(PARAM_TEXT, 'Email'),
-                    'role' => new external_value(PARAM_TEXT, 'Role'),
-                ])
-            )
+            'course' => new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Course ID'),
+                'fullname' => new external_value(PARAM_TEXT, 'Course full name'),
+                'shortname' => new external_value(PARAM_TEXT, 'Course short name'),
+                'students' => new external_multiple_structure(
+                    new external_single_structure([
+                        'id' => new external_value(PARAM_INT, 'User ID'),
+                        'username' => new external_value(PARAM_TEXT, 'Username'),
+                        'firstname' => new external_value(PARAM_TEXT, 'First name'),
+                        'lastname' => new external_value(PARAM_TEXT, 'Last name'),
+                        'email' => new external_value(PARAM_TEXT, 'Email'),
+                        'role' => new external_value(PARAM_TEXT, 'Role'),
+                    ])
+                )
+            ]),
         ]);
     }
 }

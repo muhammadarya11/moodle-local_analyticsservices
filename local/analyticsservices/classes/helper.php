@@ -3,6 +3,7 @@
 namespace local_analyticsservices;
 
 use context_course;
+use DateTime;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -33,5 +34,10 @@ class helper
     public static function get_log_table_name(): string
     {
         global $DB;
+    }
+
+    public static function convert_timestamp_to_datetime($timestamp): DateTime
+    {
+        return (new DateTime())->setTimestamp($timestamp);
     }
 }

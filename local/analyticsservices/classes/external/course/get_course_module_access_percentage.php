@@ -1,6 +1,6 @@
 <?php
 
-namespace local_analyticsservices\external;
+namespace local_analyticsservices\external\course;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
@@ -44,6 +44,7 @@ class get_course_module_access_percentage extends external_api
         if ($totalstudents === 0) {
             return [
                 'course' => [
+                    'id' => $courseid,
                     'name' => $course->fullname,
                     'shortname' => $course->shortname,
                     'modules' => []
@@ -55,14 +56,14 @@ class get_course_module_access_percentage extends external_api
         FROM {course_modules} cm
         JOIN {modules} m ON m.id = cm.module 
         WHERE cm.course = :courseid
-        AND cm.deletioninprogress = 0
-        AND cm.visible = 1";
+        AND cm.deletioninprogress = 0";
 
         $modules = $DB->get_records_sql($sql, ['courseid' => $courseid]);
 
         if (empty($modules)) {
             return [
                 'course' => [
+                    'id' => $courseid,
                     'name' => $course->fullname,
                     'shortname' => $course->shortname,
                     'modules' => []
@@ -100,6 +101,7 @@ class get_course_module_access_percentage extends external_api
 
         return [
             'course' => [
+                'id' => $courseid,
                 'name' => $course->fullname,
                 'shortname' => $course->shortname,
                 'modules' => $resultModules
@@ -111,6 +113,7 @@ class get_course_module_access_percentage extends external_api
     {
         return new external_single_structure([
             'course' => new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Course ID'),
                 'name' => new external_value(PARAM_TEXT, 'Nama course'),
                 'shortname' => new external_value(PARAM_TEXT, 'Shortname course'),
                 'modules' => new external_multiple_structure(

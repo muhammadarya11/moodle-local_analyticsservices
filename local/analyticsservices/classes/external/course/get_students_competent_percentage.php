@@ -1,6 +1,6 @@
 <?php
 
-namespace local_analyticsservices\external;
+namespace local_analyticsservices\external\course;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
@@ -47,11 +47,15 @@ class get_students_competent_percentage extends external_api
                 'id' => $course->id,
                 'fullname' => $course->fullname,
                 'shortname' => $course->shortname,
-                'total_students' => 0,
-                'competent_students' => 0,
-                'incompetent_students' => 0,
-                'competent_percentage' => 0,
-                'incompetent_percentage' => 0
+                'students' => [
+                    'total' => 0,
+                    'competent' => 0,
+                    'incompetent' => 0
+                ],
+                'percentage' => [
+                    'competent' => 0,
+                    'incompetent' => 0
+                ]
             ]];
         }
 
@@ -74,8 +78,8 @@ class get_students_competent_percentage extends external_api
                 AND cm.instance = gi.iteminstance
                 AND cm.course = gi.courseid
                 AND cm.visible = 1
-                AND cm.deletioninprogress = 0
             WHERE gi.courseid = :courseid
+                AND cm.deletioninprogress = 0
                 AND gi.itemtype = 'mod'
                 AND gi.itemmodule IS NOT NULL",
             ['courseid' => $courseid]
@@ -86,11 +90,15 @@ class get_students_competent_percentage extends external_api
                 'id' => $course->id,
                 'fullname' => $course->fullname,
                 'shortname' => $course->shortname,
-                'total_students' => $totalstudents,
-                'competent_students' => $totalstudents,
-                'incompetent_students' => 0,
-                'competent_percentage' => 100,
-                'incompetent_percentage' => 0
+                'students' => [
+                    'total' => $totalstudents,
+                    'competent' => $totalstudents,
+                    'incompetent' => 0
+                ],
+                'percentage' => [
+                    'competent' => 100,
+                    'incompetent' => 0
+                ]
             ]];
         }
 
@@ -143,11 +151,15 @@ class get_students_competent_percentage extends external_api
                 'id' => $course->id,
                 'fullname' => $course->fullname,
                 'shortname' => $course->shortname,
-                'total_students' => $totalstudents,
-                'competent_students' => $competentcount,
-                'incompetent_students' => $incompetentcount,
-                'competent_percentage' => $competentPercentage,
-                'incompetent_percentage' => $incompetentPercentage,
+                'students' => [
+                    'total' => $totalstudents,
+                    'competent' => $competentcount,
+                    'incompetent' => $incompetentcount
+                ],
+                'percentage' => [
+                    'competent' => $competentPercentage,
+                    'incompetent' => $incompetentPercentage
+                ],
             ]
         ];
     }
@@ -159,11 +171,15 @@ class get_students_competent_percentage extends external_api
                 'id' => new external_value(PARAM_INT, 'Course ID'),
                 'fullname' => new external_value(PARAM_TEXT, 'Full name'),
                 'shortname' => new external_value(PARAM_TEXT, 'Short name'),
-                'total_students' => new external_value(PARAM_INT, 'Total students'),
-                'competent_students' => new external_value(PARAM_INT, 'Total competent students'),
-                'incompetent_students' => new external_value(PARAM_INT, 'Total incompetent students'),
-                'competent_percentage' => new external_value(PARAM_FLOAT, 'Percentage of competent students'),
-                'incompetent_percentage' => new external_value(PARAM_FLOAT, 'Percentage of incompetent students'),
+                'students' => new external_single_structure([
+                    'total' => new external_value(PARAM_INT, 'Total number of students'),
+                    'competent' => new external_value(PARAM_INT, 'Number of competent students'),
+                    'incompetent' => new external_value(PARAM_INT, 'Number of incompetent students')
+                ]),
+                'percentage' => new external_single_structure([
+                    'competent' => new external_value(PARAM_FLOAT, 'Percentage of competent students'),
+                    'incompetent' => new external_value(PARAM_FLOAT, 'Percentage of incompetent students')
+                ])
             ])
         ]);
     }

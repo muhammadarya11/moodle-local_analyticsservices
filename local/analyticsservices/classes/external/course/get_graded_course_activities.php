@@ -1,6 +1,6 @@
 <?php
 
-namespace local_analyticsservices\external;
+namespace local_analyticsservices\external\course;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
@@ -37,27 +37,36 @@ class get_graded_course_activities extends external_api
         $context = context_course::instance($courseid);
         self::validate_context($context);
 
+        // Get Course Data
+        $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname', MUST_EXIST);
+
         // Ambil data mahasiswa yang enroll di course ini.
         $students = helper::get_students_in_course($courseid);
         $totalstudents = count($students);
 
         // Kalau tidak ada mahasiswa, return kosong.
         if ($totalstudents === 0) {
-            return ['activities' => []];
+            return [
+                'course' => [
+                    'id' => $courseid,
+                    'name' => $course->fullname,
+                    'shortname' => $course->shortname,
+                    'activities' => []
+                ]
+            ];
         }
 
         // Ambil semua aktivitas yang memiliki grade item (modul apapun).
         $sql = "SELECT gi.id AS gradeitemid,
-                       gi.itemname,
-                       gi.itemmodule,
-                       gi.iteminstance,
-                       COUNT(DISTINCT g.userid) AS gradedcount
+                    gi.itemname,
+                    gi.itemmodule,
+                    gi.iteminstance,
+                    COUNT(DISTINCT g.userid) AS gradedcount
                 FROM {grade_items} gi
                 JOIN {modules} m ON m.name = gi.itemmodule
                 JOIN {course_modules} cm ON cm.module = m.id
                     AND cm.instance = gi.iteminstance
                     AND cm.deletioninprogress = 0
-                    AND cm.visible = 1
                 LEFT JOIN {grade_grades} g ON g.itemid = gi.id AND g.finalgrade IS NOT NULL
                     WHERE gi.courseid = :courseid
                     AND gi.itemtype = 'mod'
@@ -81,7 +90,14 @@ class get_graded_course_activities extends external_api
             ];
         }
 
-        return ['activities' => $results];
+        return [
+            'course' => [
+                'id' => $courseid,
+                'name' => $course->fullname,
+                'shortname' => $course->shortname,
+                'activities' => $results
+            ]
+        ];
     }
 
     /**
@@ -90,14 +106,20 @@ class get_graded_course_activities extends external_api
     public static function execute_returns()
     {
         return new external_single_structure([
-            'activities' => new external_multiple_structure(
-                new external_single_structure([
-                    'id' => new external_value(PARAM_INT, 'Activity instance ID'),
-                    'name' => new external_value(PARAM_TEXT, 'Activity name'),
-                    'module' => new external_value(PARAM_TEXT, 'Module type'),
-                    'percentage_graded' => new external_value(PARAM_FLOAT, 'Percentage of students graded')
-                ])
-            )
+            'course' => new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Course ID'),
+                'name' => new external_value(PARAM_TEXT, 'Nama course'),
+                'shortname' => new external_value(PARAM_TEXT, 'Shortname course'),
+                'activities' => new external_multiple_structure(
+                    new external_single_structure([
+                        'id' => new external_value(PARAM_INT, 'Activity instance ID'),
+                        'name' => new external_value(PARAM_TEXT, 'Activity name'),
+                        'module' => new external_value(PARAM_TEXT, 'Module name'),
+                        'percentage_graded' => new external_value(PARAM_FLOAT, 'Percentage of students graded'),
+                    ]),
+                    'List of graded activities in the course'
+                )
+            ])
         ]);
     }
 }

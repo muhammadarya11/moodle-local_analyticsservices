@@ -1,6 +1,6 @@
 <?php
 
-namespace local_analyticsservices\external;
+namespace local_analyticsservices\external\course;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
@@ -36,6 +36,8 @@ class get_uncompetent_activities extends external_api
         $context = context_course::instance($courseid);
         self::validate_context($context);
 
+        $course = $DB->get_record('course', ['id' => $params['courseid']], 'id, fullname, shortname', MUST_EXIST);
+
         $students = helper::get_students_in_course($courseid);
         if (empty($students)) {
             return ['activities' => []];
@@ -64,7 +66,14 @@ class get_uncompetent_activities extends external_api
         );
 
         if (empty($modules)) {
-            return ['activities' => []];
+            return [
+                'course' => [
+                    'id' => $course->id,
+                    'fullname' => $course->fullname,
+                    'shortname' => $course->shortname,
+                    'activities' => []
+                ],
+            ];
         }
 
         // Ambil semua grade sekaligus untuk semua grade item di course ini.
@@ -123,20 +132,32 @@ class get_uncompetent_activities extends external_api
             }
         }
 
-        return ['activities' => $result];
+        return [
+            'course' => [
+                'id' => $course->id,
+                'fullname' => $course->fullname,
+                'shortname' => $course->shortname,
+                'activities' => $result
+            ],
+        ];
     }
 
     public static function execute_returns()
     {
         return new external_single_structure([
-            'activities' => new external_multiple_structure(
-                new external_single_structure([
-                    'cmid' => new external_value(PARAM_INT, 'Course module ID'),
-                    'modname' => new external_value(PARAM_TEXT, 'Nama modul (assign, quiz, dsb)'),
-                    'itemname' => new external_value(PARAM_TEXT, 'Nama aktivitas'),
-                    'percent_uncompetent' => new external_value(PARAM_FLOAT, 'Persentase mahasiswa belum kompeten'),
-                ])
-            )
+            'course' => new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Course ID'),
+                'fullname' => new external_value(PARAM_TEXT, 'Course full name'),
+                'shortname' => new external_value(PARAM_TEXT, 'Course short name'),
+                'activities' => new external_multiple_structure(
+                    new external_single_structure([
+                        'cmid' => new external_value(PARAM_INT, 'Course module ID'),
+                        'modname' => new external_value(PARAM_TEXT, 'Nama modul (assign, quiz, dsb)'),
+                        'itemname' => new external_value(PARAM_TEXT, 'Nama aktivitas'),
+                        'percent_uncompetent' => new external_value(PARAM_FLOAT, 'Persentase mahasiswa belum kompeten'),
+                    ])
+                )
+            ]),
         ]);
     }
 }

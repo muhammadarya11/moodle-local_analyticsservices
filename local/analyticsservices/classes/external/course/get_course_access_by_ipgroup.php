@@ -1,6 +1,6 @@
 <?php
 
-namespace local_analyticsservices\external;
+namespace local_analyticsservices\external\course;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
@@ -36,6 +36,8 @@ class get_course_access_by_ipgroup extends external_api
         $context = context_course::instance($courseid);
         self::validate_context($context);
 
+        $course = $DB->get_record('course', ['id' => $params['courseid']], 'id, fullname, shortname', MUST_EXIST);
+
         // Ambil log akses berdasarkan IP.
         // Hanya event course yang relevan (course viewed dan activity viewed).
         if ($unique_by_user) {
@@ -69,7 +71,14 @@ class get_course_access_by_ipgroup extends external_api
             ];
         }
 
-        return ['ip_groups' => $results];
+        return [
+            'course' => [
+                'id' => $course->id,
+                'fullname' => $course->fullname,
+                'shortname' => $course->shortname,
+                'ip_groups' => $results
+            ]
+        ];
     }
 
     /**
@@ -78,12 +87,17 @@ class get_course_access_by_ipgroup extends external_api
     public static function execute_returns()
     {
         return new external_single_structure([
-            'ip_groups' => new external_multiple_structure(
-                new external_single_structure([
-                    'ip' => new external_value(PARAM_TEXT, 'IP address'),
-                    'access_count' => new external_value(PARAM_INT, 'Total access count from this IP'),
-                ])
-            )
+            'course' => new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Course ID'),
+                'fullname' => new external_value(PARAM_TEXT, 'Course full name'),
+                'shortname' => new external_value(PARAM_TEXT, 'Course short name'),
+                'ip_groups' => new external_multiple_structure(
+                    new external_single_structure([
+                        'ip' => new external_value(PARAM_TEXT, 'IP address'),
+                        'access_count' => new external_value(PARAM_INT, 'Total access count from this IP'),
+                    ])
+                )
+            ]),
         ]);
     }
 }

@@ -32,7 +32,7 @@ class get_quiz_attempt_frequency_by_section extends external_api
         ]);
 
         // Validasi context course
-        $section = $DB->get_record('course_sections', ['id' => $sectionid], 'id, course', MUST_EXIST);
+        $section = $DB->get_record('course_sections', ['id' => $sectionid], 'id, course, name', MUST_EXIST);
         $context = context_course::instance($section->course);
         self::validate_context($context);
 
@@ -50,9 +50,12 @@ class get_quiz_attempt_frequency_by_section extends external_api
 
         if (empty($modulesquiz)) {
             return [
-                'courseid' => $section->course,
-                'sectionid' => $sectionid,
-                'quiz' => [],
+                'section' => [
+                    'id' => $section->id,
+                    'name' => $section->name,
+                    'courseid' => $section->course,
+                    'quiz' => [],
+                ],
             ];
         }
 
@@ -63,9 +66,12 @@ class get_quiz_attempt_frequency_by_section extends external_api
         $students = helper::get_students_in_course($section->course);
         if (empty($students)) {
             return [
-                'courseid' => $section->course,
-                'sectionid' => $sectionid,
-                'quiz' => [],
+                'section' => [
+                    'id' => $section->id,
+                    'name' => $section->name,
+                    'courseid' => $section->course,
+                    'quiz' => [],
+                ],
             ];
         }
 
@@ -117,9 +123,12 @@ class get_quiz_attempt_frequency_by_section extends external_api
         }
 
         return [
-            'courseid' => $section->course,
-            'sectionid' => $sectionid,
-            'quiz' => array_values($result)
+            'section' => [
+                'id' => $section->id,
+                'name' => $section->name,
+                'courseid' => $section->course,
+                'quiz' => array_values($result),
+            ],
         ];
     }
 
@@ -129,20 +138,27 @@ class get_quiz_attempt_frequency_by_section extends external_api
     public static function execute_returns()
     {
         return new external_single_structure([
-            'courseid' => new external_value(PARAM_INT, 'Course ID'),
-            'sectionid' => new external_value(PARAM_INT, 'Section ID'),
-            'quiz' => new external_multiple_structure(
-                new external_single_structure([
-                    'quizid' => new external_value(PARAM_INT, 'Quiz ID'),
-                    'quizname' => new external_value(PARAM_TEXT, 'Nama quiz'),
-                    'frequencies' => new external_multiple_structure(
-                        new external_single_structure([
-                            'attempt_count' => new external_value(PARAM_INT, 'Jumlah percobaan attempt'),
-                            'total_users' => new external_value(PARAM_INT, 'Total user yang melakukan attempt sebanyak itu'),
-                        ])
-                    ),
-                ])
-            ),
+            'section' => new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Section ID'),
+                'name' => new external_value(PARAM_TEXT, 'Section name'),
+                'courseid' => new external_value(PARAM_INT, 'Course ID'),
+                'quiz' => new external_multiple_structure(
+                    new external_single_structure([
+                        'quizid' => new external_value(PARAM_INT, 'Quiz ID'),
+                        'quizname' => new external_value(PARAM_TEXT, 'Quiz name'),
+                        'frequencies' => new external_multiple_structure(
+                            new external_single_structure([
+                                'attempt_count' => new external_value(PARAM_INT, 'Number of attempts'),
+                                'total_users' => new external_value(PARAM_INT, 'Total users with this attempt count'),
+                            ]),
+                            'List of attempt frequencies',
+                            VALUE_DEFAULT
+                        ),
+                    ]),
+                    'List of quizzes in the section',
+                    VALUE_DEFAULT
+                ),
+            ]),
         ]);
     }
 }

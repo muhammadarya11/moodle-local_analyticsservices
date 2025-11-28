@@ -71,7 +71,7 @@ class get_quiz_attempt_average_time_by_section extends external_api
         return [
             'courseid' => $section->course,
             'sectionid' => $sectionid,
-            'attempts' => array_values($records), // pastikan hasil jadi array numerik
+            'attempts' => array_values($records),
         ];
     }
 

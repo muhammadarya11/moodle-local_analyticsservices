@@ -32,7 +32,7 @@ class get_course_modules_info_by_section extends external_api
         ]);
 
         // Validasi context course
-        $section = $DB->get_record('course_sections', ['id' => $sectionid], 'id, course', MUST_EXIST);
+        $section = $DB->get_record('course_sections', ['id' => $sectionid], 'id, course, name', MUST_EXIST);
         $context = context_course::instance($section->course);
         self::validate_context($context);
 
@@ -42,9 +42,12 @@ class get_course_modules_info_by_section extends external_api
         $totalstudents = count($studentids);
         if (empty($students)) {
             return [
-                'courseid' => $section->course,
-                'sectionid' => $sectionid,
-                'modules' => [],
+                'section' => [
+                    'id' => $section->id,
+                    'name' => $section->name,
+                    'courseid' => $section->course,
+                    'modules' => []
+                ],
             ];
         }
 
@@ -59,9 +62,12 @@ class get_course_modules_info_by_section extends external_api
 
         if (empty($modules)) {
             return [
-                'courseid' => $section->course,
-                'sectionid' => $sectionid,
-                'modules' => [],
+                'section' => [
+                    'id' => $section->id,
+                    'name' => $section->name,
+                    'courseid' => $section->course,
+                    'modules' => []
+                ],
             ];
         }
 
@@ -91,9 +97,12 @@ class get_course_modules_info_by_section extends external_api
             ];
         }
         return [
-            'courseid' => $section->course,
-            'sectionid' => $sectionid,
-            'modules' => $result
+            'section' => [
+                'id' => $section->id,
+                'name' => $section->name,
+                'courseid' => $section->course,
+                'modules' => $result
+            ],
         ];
     }
 
@@ -103,16 +112,19 @@ class get_course_modules_info_by_section extends external_api
     public static function execute_returns()
     {
         return new external_single_structure([
-            'courseid' => new external_value(PARAM_INT, 'Course ID'),
-            'sectionid' => new external_value(PARAM_INT, 'Section ID'),
-            'modules' => new external_multiple_structure(
-                new external_single_structure([
-                    'cmid' => new external_value(PARAM_INT, 'Course module ID'),
-                    'total_viewed' => new external_value(PARAM_INT, 'Jumlah mahasiswa yang membuka modul ini'),
-                    'users_viewed' => new external_value(PARAM_INT, 'Jumlah mahasiswa yang membuka modul ini'),
-                    'total_users' => new external_value(PARAM_INT, 'Jumlah mahasiswa yang enroll di course ini')
-                ])
-            )
+            'section' => new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Section ID'),
+                'name' => new external_value(PARAM_TEXT, 'Section name'),
+                'courseid' => new external_value(PARAM_INT, 'Course ID'),
+                'modules' => new external_multiple_structure(
+                    new external_single_structure([
+                        'cmid' => new external_value(PARAM_INT, 'Course module ID'),
+                        'total_viewed' => new external_value(PARAM_INT, 'Jumlah mahasiswa yang membuka modul ini'),
+                        'users_viewed' => new external_value(PARAM_INT, 'Jumlah mahasiswa yang membuka modul ini'),
+                        'total_users' => new external_value(PARAM_INT, 'Jumlah mahasiswa yang enroll di course ini')
+                    ])
+                )
+            ]),
         ]);
     }
 }
