@@ -27,9 +27,9 @@ class get_course_access_by_timeperiod extends external_api
                     'start' => new external_value(PARAM_RAW, 'Jam mulai pagi (format HH:MM)', VALUE_DEFAULT, '05:00'),
                     'end'   => new external_value(PARAM_RAW, 'Jam akhir pagi (format HH:MM)', VALUE_DEFAULT, '07:59'),
                 ]),
-                'jam_kerja' => new external_single_structure([
-                    'start' => new external_value(PARAM_RAW, 'Jam mulai jam kerja (format HH:MM)', VALUE_DEFAULT, '08:00'),
-                    'end'   => new external_value(PARAM_RAW, 'Jam akhir jam kerja (format HH:MM)', VALUE_DEFAULT, '15:59'),
+                'siang' => new external_single_structure([
+                    'start' => new external_value(PARAM_RAW, 'Jam mulai siang (format HH:MM)', VALUE_DEFAULT, '08:00'),
+                    'end'   => new external_value(PARAM_RAW, 'Jam akhir siang (format HH:MM)', VALUE_DEFAULT, '15:59'),
                 ]),
                 'malam' => new external_single_structure([
                     'start' => new external_value(PARAM_RAW, 'Jam mulai malam (format HH:MM)', VALUE_DEFAULT, '16:00'),
@@ -69,7 +69,7 @@ class get_course_access_by_timeperiod extends external_api
 
         $periodConfig = $params['periods'] ?: [
             'pagi' => ['start' => '05:00', 'end' => '07:59'],
-            'jam_kerja' => ['start' => '08:00', 'end' => '15:59'],
+            'siang' => ['start' => '08:00', 'end' => '15:59'],
             'malam' => ['start' => '16:00', 'end' => '04:59']
         ];
 

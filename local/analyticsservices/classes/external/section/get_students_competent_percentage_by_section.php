@@ -1,6 +1,6 @@
 <?php
 
-namespace local_analyticsservices\external\course;
+namespace local_analyticsservices\external\section;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
@@ -12,50 +12,59 @@ use local_analyticsservices\helper;
 
 defined('MOODLE_INTERNAL') || die();
 
-class get_students_competent_percentage extends external_api
+class get_students_competent_percentage_by_section extends external_api
 {
     public static function execute_parameters()
     {
         return new external_function_parameters([
-            'courseid'        => new external_value(PARAM_INT, 'Course ID'),
-            'grade_threshold'       => new external_value(PARAM_FLOAT, 'Minimum grade per activity to be considered competent', VALUE_DEFAULT, 80.0),
+            'sectionid'               => new external_value(PARAM_INT, 'Section ID'),
+            'grade_threshold'         => new external_value(PARAM_FLOAT, 'Minimum grade per activity to be considered competent', VALUE_DEFAULT, 80.0),
             'competent_activity_rate' => new external_value(PARAM_FLOAT, 'Minimum percentage of activities passed to be competent', VALUE_DEFAULT, 80.0),
-            'inactive_activity_rate' => new external_value(PARAM_FLOAT, 'Maximum percentage of activities participated to be considered an inactive student', VALUE_DEFAULT, 20.0),
+            'inactive_activity_rate'  => new external_value(PARAM_FLOAT, 'Maximum percentage of activities participated to be considered an inactive student', VALUE_DEFAULT, 20.0),
         ]);
     }
 
-    public static function execute($courseid, $grade_threshold, $competent_activity_rate, $inactive_activity_rate)
+    public static function execute($sectionid, $grade_threshold, $competent_activity_rate, $inactive_activity_rate)
     {
         global $DB;
 
-        // Validate parameters and context course
+        // Validate parameters
         $params = self::validate_parameters(self::execute_parameters(), [
-            'courseid' => $courseid,
+            'sectionid' => $sectionid,
             'grade_threshold' => $grade_threshold,
             'competent_activity_rate' => $competent_activity_rate,
             'inactive_activity_rate' => $inactive_activity_rate
         ]);
 
+        // Get section data and course
+        $section = $DB->get_record('course_sections', ['id' => $params['sectionid']], 'id, course, name, section', MUST_EXIST);
+        $courseid = $section->course;
+
+        // Validate context
         $context = context_course::instance($courseid);
         self::validate_context($context);
 
         // Get Course Data
-        $course = $DB->get_record('course', ['id' => $params['courseid']], 'id, fullname, shortname', MUST_EXIST);
+        $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname', MUST_EXIST);
 
         // Get student data
         $students = helper::get_students_in_course($courseid);
         if (empty($students)) {
-            return ['course' => [
-                'id' => $course->id,
-                'fullname' => $course->fullname,
-                'shortname' => $course->shortname,
-                'students' => [
-                    'total' => 0,
-                    'competent' => 0,
-                    'incompetent' => 0,
-                    'inactive' => 0,
+            return [
+                'section' => [
+                    'id' => $section->id,
+                    'name' => $section->name,
+                    'sectionnumber' => $section->section,
+                    'courseid' => $course->id,
+                    'coursename' => $course->fullname,
+                    'students' => [
+                        'total' => 0,
+                        'competent' => 0,
+                        'incompetent' => 0,
+                        'inactive' => 0,
+                    ],
                 ],
-            ]];
+            ];
         }
 
         // Hitung kompetensi per mahasiswa
@@ -64,7 +73,7 @@ class get_students_competent_percentage extends external_api
         $inactivecount = 0;
         $totalstudents = count($students);
 
-        // List modules atau aktivitas yang bisa dinilai atau memiliki grade
+        // List modules atau aktivitas yang bisa dinilai dalam section ini
         $modules = $DB->get_records_sql(
             "SELECT DISTINCT
                 gi.id AS gradeitemid,
@@ -79,29 +88,37 @@ class get_students_competent_percentage extends external_api
                 AND cm.instance = gi.iteminstance
                 AND cm.course = gi.courseid
                 AND cm.visible = 1
+                AND cm.section = :sectionid
             WHERE gi.courseid = :courseid
                 AND cm.deletioninprogress = 0
                 AND gi.itemtype = 'mod'
                 AND gi.itemmodule IS NOT NULL",
-            ['courseid' => $courseid]
+            [
+                'courseid' => $courseid,
+                'sectionid' => $params['sectionid']
+            ]
         );
 
         // Jika tidak ada modul yang bisa dinilai, anggap semua mahasiswa kompeten
         if (empty($modules)) {
-            return ['course' => [
-                'id' => $course->id,
-                'fullname' => $course->fullname,
-                'shortname' => $course->shortname,
-                'students' => [
-                    'total' => $totalstudents,
-                    'competent' => $totalstudents,
-                    'incompetent' => 0,
-                    'inactive' => 0,
+            return [
+                'section' => [
+                    'id' => $section->id,
+                    'name' => $section->name,
+                    'sectionnumber' => $section->section,
+                    'courseid' => $course->id,
+                    'coursename' => $course->fullname,
+                    'students' => [
+                        'total' => $totalstudents,
+                        'competent' => $totalstudents,
+                        'incompetent' => 0,
+                        'inactive' => 0,
+                    ],
                 ],
-            ]];
+            ];
         }
 
-        // Ambil semua grade sekaligus untuk semua grade item di course ini.
+        // Ambil semua grade sekaligus untuk semua grade item di section ini
         list($gradeitem_sql, $gradeitem_params) = $DB->get_in_or_equal(
             array_column($modules, 'gradeitemid'),
             SQL_PARAMS_NAMED,
@@ -121,7 +138,7 @@ class get_students_competent_percentage extends external_api
             $grades_by_user[$g->userid][$g->itemid] = $g->finalgrade;
         }
 
-        // Total grade items yang bisa dinilai
+        // Total grade items yang bisa dinilai dalam section ini
         $totalactivities = count($modules);
 
         foreach ($students as $student) {
@@ -159,34 +176,38 @@ class get_students_competent_percentage extends external_api
         }
 
         return [
-            'course' => [
-                'id' => $course->id,
-                'fullname' => $course->fullname,
-                'shortname' => $course->shortname,
+            'section' => [
+                'id' => $section->id,
+                'name' => $section->name,
+                'sectionnumber' => $section->section,
+                'courseid' => $course->id,
+                'coursename' => $course->fullname,
                 'students' => [
                     'total' => $totalstudents,
                     'competent' => $competentcount,
                     'incompetent' => $incompetentcount,
                     'inactive' => $inactivecount,
                 ],
-            ]
+            ],
         ];
     }
 
     public static function execute_returns()
     {
         return new external_single_structure([
-            'course' => new external_single_structure([
-                'id' => new external_value(PARAM_INT, 'Course ID'),
-                'fullname' => new external_value(PARAM_TEXT, 'Full name'),
-                'shortname' => new external_value(PARAM_TEXT, 'Short name'),
+            'section' => new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Section ID'),
+                'name' => new external_value(PARAM_TEXT, 'Section name'),
+                'sectionnumber' => new external_value(PARAM_INT, 'Section number'),
+                'courseid' => new external_value(PARAM_INT, 'Course ID'),
+                'coursename' => new external_value(PARAM_TEXT, 'Course name'),
                 'students' => new external_single_structure([
                     'total' => new external_value(PARAM_INT, 'Total number of students'),
                     'competent' => new external_value(PARAM_INT, 'Number of competent students'),
                     'incompetent' => new external_value(PARAM_INT, 'Number of incompetent students'),
                     'inactive' => new external_value(PARAM_INT, 'Number of inactive students'),
                 ]),
-            ])
+            ]),
         ]);
     }
 }

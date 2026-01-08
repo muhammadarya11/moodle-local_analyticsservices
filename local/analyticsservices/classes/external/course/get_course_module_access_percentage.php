@@ -95,6 +95,7 @@ class get_course_module_access_percentage extends external_api
             $resultModules[] = [
                 'cmid' => $mod->cmid,
                 'modname' => $mod->modname,
+                'total_viewed' => $viewedcount,
                 'percentage_viewed' => $percent
             ];
         }
@@ -120,6 +121,7 @@ class get_course_module_access_percentage extends external_api
                     new external_single_structure([
                         'cmid' => new external_value(PARAM_INT, 'Course module ID'),
                         'modname' => new external_value(PARAM_TEXT, 'Nama module (type)'),
+                        'total_viewed' => new external_value(PARAM_INT, 'Total mahasiswa yang membuka module ini'),
                         'percentage_viewed' => new external_value(PARAM_FLOAT, 'Persentase mahasiswa yang membuka module ini')
                     ])
                 )

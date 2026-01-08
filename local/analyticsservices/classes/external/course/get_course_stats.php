@@ -80,26 +80,10 @@ class get_course_stats extends external_api
             array_merge(['courseid' => $courseid, 'start' => $start, 'end' => $end], $student_params)
         );
 
-        // Grouping mode berdasarkan rentang tanggal.
-        $diff = $end - $start;
-        if ($diff <= 7 * 86400) {
-            $groupmode = 'day';
-        } else if ($diff <= 31 * 86400) {
-            $groupmode = 'week';
-        } else {
-            $groupmode = 'month';
-        }
-
         $grouped = [];
 
         foreach ($records as $record) {
-            if ($groupmode === 'day') {
-                $label = date('Y-m-d', $record->timecreated);
-            } else if ($groupmode === 'week') {
-                $label = date('o-W', $record->timecreated); // ISO week
-            } else { // month
-                $label = date('Y-m', $record->timecreated);
-            }
+            $label = date('o-W', $record->timecreated);
 
             if (!isset($grouped[$label])) {
                 $grouped[$label] = [
@@ -121,61 +105,22 @@ class get_course_stats extends external_api
         $endObj   = (new DateTime())->setTimestamp($end);
 
         // Isi data kosong pada periode tertentu.
-        if ($groupmode === 'day') {
+        $startObj->modify('monday this week');
+        $endObj->modify('monday next week');
 
-            $period = new DatePeriod(
-                $startObj,
-                new DateInterval('P1D'),
-                $endObj,
-            );
+        $period = new DatePeriod(
+            $startObj,
+            new DateInterval('P1W'),
+            $endObj
+        );
 
-            foreach ($period as $d) {
-                $label = $d->format('Y-m-d');
-                $filled[$label] = [
-                    'label' => $label,
-                    'views' => $grouped[$label]['views'] ?? 0,
-                    'posts' => $grouped[$label]['posts'] ?? 0
-                ];
-            }
-        } else if ($groupmode === 'week') {
-
-            // Normalize start to Monday (ISO 8601)
-            $startObj->modify('monday this week');
-            $endObj->modify('monday next week');
-
-            $period = new DatePeriod(
-                $startObj,
-                new DateInterval('P1W'),
-                $endObj
-            );
-
-            foreach ($period as $week) {
-                $label = $week->format('o-W'); // ISO week
-                $filled[$label] = [
-                    'label' => $label,
-                    'views' => $grouped[$label]['views'] ?? 0,
-                    'posts' => $grouped[$label]['posts'] ?? 0
-                ];
-            }
-        } else { // month
-
-            $startObj->modify('first day of this month');
-            $endObj->modify('last day of this month');
-
-            $period = new DatePeriod(
-                $startObj,
-                new DateInterval('P1M'),
-                $endObj
-            );
-
-            foreach ($period as $m) {
-                $label = $m->format('Y-m');
-                $filled[$label] = [
-                    'label' => $label,
-                    'views' => $grouped[$label]['views'] ?? 0,
-                    'posts' => $grouped[$label]['posts'] ?? 0
-                ];
-            }
+        foreach ($period as $week) {
+            $label = $week->format('o-W'); // ISO week
+            $filled[$label] = [
+                'label' => $label,
+                'views' => $grouped[$label]['views'] ?? 0,
+                'posts' => $grouped[$label]['posts'] ?? 0
+            ];
         }
 
         return [
@@ -183,7 +128,6 @@ class get_course_stats extends external_api
                 'id' => $course->id,
                 'fullname' => $course->fullname,
                 'shortname' => $course->shortname,
-                'statsmode' => $groupmode,
                 'stats' => array_values($filled),
             ]
         ];
@@ -199,7 +143,6 @@ class get_course_stats extends external_api
                 'id' => new external_value(PARAM_INT, 'Course ID'),
                 'fullname' => new external_value(PARAM_TEXT, 'Course full name'),
                 'shortname' => new external_value(PARAM_TEXT, 'Course short name'),
-                'statsmode' => new external_value(PARAM_TEXT, 'Grouping mode (day, week, month)'),
                 'stats' => new external_multiple_structure(
                     new external_single_structure([
                         'label' => new external_value(PARAM_TEXT, 'Date label'),

@@ -1,6 +1,6 @@
 <?php
 
-namespace local_analyticsservices\external\course;
+namespace local_analyticsservices\external\section;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
@@ -13,26 +13,30 @@ use local_analyticsservices\helper;
 
 defined('MOODLE_INTERNAL') || die();
 
-class get_graded_course_activities extends external_api
+class get_graded_course_activities_by_section extends external_api
 {
 
     public static function execute_parameters()
     {
         return new external_function_parameters([
-            'courseid' => new external_value(PARAM_INT, 'Course ID'),
+            'sectionid' => new external_value(PARAM_INT, 'Section ID'),
         ]);
     }
 
     /**
-     * Get data aktivitas yang sudah dikerjakan dan dinilai.
+     * Get data aktivitas yang sudah dikerjakan dan dinilai berdasarkan section.
      */
-    public static function execute($courseid)
+    public static function execute($sectionid)
     {
         global $DB;
 
         self::validate_parameters(self::execute_parameters(), [
-            'courseid' => $courseid
+            'sectionid' => $sectionid
         ]);
+
+        // Get section data and course ID
+        $section = $DB->get_record('course_sections', ['id' => $sectionid], 'id, course, name, section', MUST_EXIST);
+        $courseid = $section->course;
 
         $context = context_course::instance($courseid);
         self::validate_context($context);
@@ -47,16 +51,19 @@ class get_graded_course_activities extends external_api
         // Kalau tidak ada mahasiswa, return kosong.
         if ($totalstudents == 0) {
             return [
-                'course' => [
-                    'id' => $courseid,
-                    'name' => $course->fullname,
-                    'shortname' => $course->shortname,
+                'section' => [
+                    'id' => $sectionid,
+                    'name' => $section->name ?? 'Section ' . $section->section,
+                    'section_number' => (int)$section->section,
+                    'courseid' => $courseid,
+                    'coursename' => $course->fullname,
+                    'courseshortname' => $course->shortname,
                     'activities' => []
                 ]
             ];
         }
 
-        // Ambil semua aktivitas yang memiliki grade item (modul apapun).
+        // Ambil semua aktivitas yang memiliki grade item (modul apapun) di section ini.
         $sql = "SELECT gi.id AS gradeitemid,
                     gi.itemname,
                     gi.itemmodule,
@@ -68,13 +75,14 @@ class get_graded_course_activities extends external_api
                 JOIN {course_modules} cm ON cm.module = m.id
                     AND cm.instance = gi.iteminstance
                     AND cm.deletioninprogress = 0
+                    AND cm.section = :sectionid
                 LEFT JOIN {grade_grades} g ON g.itemid = gi.id
-                    WHERE gi.courseid = :courseid
+                WHERE gi.courseid = :courseid
                     AND gi.itemtype = 'mod'
                 GROUP BY gi.id, gi.itemname, gi.itemmodule, gi.iteminstance
                 ORDER BY gi.itemmodule, gi.itemname";
 
-        $records = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+        $records = $DB->get_records_sql($sql, ['courseid' => $courseid, 'sectionid' => $sectionid]);
 
         $results = [];
         foreach ($records as $r) {
@@ -89,10 +97,13 @@ class get_graded_course_activities extends external_api
         }
 
         return [
-            'course' => [
-                'id' => $courseid,
-                'name' => $course->fullname,
-                'shortname' => $course->shortname,
+            'section' => [
+                'id' => $sectionid,
+                'name' => $section->name ?? 'Section ' . $section->section,
+                'section_number' => (int)$section->section,
+                'courseid' => $courseid,
+                'coursename' => $course->fullname,
+                'courseshortname' => $course->shortname,
                 'activities' => $results
             ]
         ];
@@ -104,10 +115,13 @@ class get_graded_course_activities extends external_api
     public static function execute_returns()
     {
         return new external_single_structure([
-            'course' => new external_single_structure([
-                'id' => new external_value(PARAM_INT, 'Course ID'),
-                'name' => new external_value(PARAM_TEXT, 'Nama course'),
-                'shortname' => new external_value(PARAM_TEXT, 'Shortname course'),
+            'section' => new external_single_structure([
+                'id' => new external_value(PARAM_INT, 'Section ID'),
+                'name' => new external_value(PARAM_TEXT, 'Nama section'),
+                'section_number' => new external_value(PARAM_INT, 'Section number'),
+                'courseid' => new external_value(PARAM_INT, 'Course ID'),
+                'coursename' => new external_value(PARAM_TEXT, 'Nama course'),
+                'courseshortname' => new external_value(PARAM_TEXT, 'Shortname course'),
                 'activities' => new external_multiple_structure(
                     new external_single_structure([
                         'id' => new external_value(PARAM_INT, 'Activity instance ID'),
@@ -117,7 +131,7 @@ class get_graded_course_activities extends external_api
                         'students_submitted' => new external_value(PARAM_INT, 'Number of students who have submitted'),
                         'students_graded' => new external_value(PARAM_INT, 'Number of students who have been graded'),
                     ]),
-                    'List of graded activities in the course'
+                    'List of graded activities in the section'
                 )
             ])
         ]);
