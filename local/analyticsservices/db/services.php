@@ -66,6 +66,15 @@ $functions = [
         'loginrequired' => true,
         'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE]
     ],
+    'local_analyticsservices_get_underperforming_course_activities' => [
+        'classname'   => 'local_analyticsservices\\external\\course\\get_underperforming_course_activities',
+        'methodname'  => 'execute',
+        'description' => 'Get underperforming course activities',
+        'type'        => 'read',
+        'ajax'        => true,
+        'loginrequired' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE]
+    ],
 
     // Function untuk section
     'local_analyticsservices_get_course_modules_info_by_section' => [

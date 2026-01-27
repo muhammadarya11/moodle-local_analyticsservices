@@ -55,7 +55,6 @@ class get_inactive_students extends external_api
                 ORDER BY u.lastname, u.firstname";
 
         // Get student data
-        // $students = helper::get_students_in_course($courseid);
         $students = $DB->get_records_sql($sql, [
             'courseid' => $courseid,
             'contextcourse' => $context->contextlevel

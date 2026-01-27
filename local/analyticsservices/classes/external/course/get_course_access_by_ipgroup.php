@@ -18,7 +18,7 @@ class get_course_access_by_ipgroup extends external_api
     {
         return new external_function_parameters([
             'courseid' => new external_value(PARAM_INT, 'Course ID'),
-            'unique_by_user' => new external_value(PARAM_BOOL, 'Count by unique user', VALUE_OPTIONAL, true),
+            'unique_by_user' => new external_value(PARAM_BOOL, 'Count by unique user'),
         ]);
     }
 
