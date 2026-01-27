@@ -23,10 +23,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->version = 2026012701;
-$plugin->requires = 2022041900.00; // Requires Moodle 4.0.
+$plugin->release = '1';
+$plugin->requires = 2024100700; // Requires Moodle 4.5.0.
 $plugin->component = 'local_analyticsservices';
-$plugin->maturity = MATURITY_BETA;
+$plugin->maturity = MATURITY_STABLE;
 
 $plugin->dependencies = [
-    'local_modcustomfields' => 2023110600 // Custom fields for activity modules Versi 6
+    'local_modcustomfields' => 2023110600 // Custom fields for activity modules Version 6
 ];
