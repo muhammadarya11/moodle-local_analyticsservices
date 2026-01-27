@@ -30,17 +30,18 @@ class get_course_access_by_ipgroup extends external_api
         global $DB;
 
         $params = self::validate_parameters(self::execute_parameters(), [
-            'courseid' => $courseid
+            'courseid' => $courseid,
+            'unique_by_user' => $unique_by_user
         ]);
 
-        $context = context_course::instance($courseid);
+        $context = context_course::instance($params['courseid']);
         self::validate_context($context);
 
         $course = $DB->get_record('course', ['id' => $params['courseid']], 'id, fullname, shortname', MUST_EXIST);
 
         // Ambil log akses berdasarkan IP.
         // Hanya event course yang relevan (course viewed dan activity viewed).
-        if ($unique_by_user) {
+        if ($params['unique_by_user']) {
             // Mode: hitung user unik per IP
             $sql = "SELECT ip, COUNT(DISTINCT userid) AS totalaccess
                 FROM {logstore_standard_log}
@@ -61,7 +62,7 @@ class get_course_access_by_ipgroup extends external_api
                 ORDER BY totalaccess DESC";
         }
 
-        $records = $DB->get_records_sql($sql, ['courseid' => $courseid]);
+        $records = $DB->get_records_sql($sql, ['courseid' => $params['courseid']]);
 
         $results = [];
         foreach ($records as $r) {
