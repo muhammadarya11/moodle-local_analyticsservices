@@ -61,7 +61,10 @@ class get_uncompetent_activities extends external_api
                 AND cm.deletioninprogress = 0
             WHERE gi.courseid = :courseid
                 AND gi.itemtype = 'mod'
-                AND gi.itemmodule IS NOT NULL",
+                AND gi.itemmodule IS NOT NULL
+                AND gi.gradetype != 0
+                AND gi.grademax > 0
+                AND (gi.itemmodule != 'assign' OR (SELECT grade FROM {assign} WHERE id = gi.iteminstance) != 0)",
             ['courseid' => $courseid]
         );
 

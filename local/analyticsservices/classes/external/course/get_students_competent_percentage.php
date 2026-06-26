@@ -55,6 +55,7 @@ class get_students_competent_percentage extends external_api
                     'incompetent' => 0,
                     'inactive' => 0,
                 ],
+                'total_activities' => 0,
             ]];
         }
 
@@ -82,7 +83,10 @@ class get_students_competent_percentage extends external_api
             WHERE gi.courseid = :courseid
                 AND cm.deletioninprogress = 0
                 AND gi.itemtype = 'mod'
-                AND gi.itemmodule IS NOT NULL",
+                AND gi.itemmodule IS NOT NULL
+                AND gi.gradetype != 0
+                AND gi.grademax > 0
+                AND (gi.itemmodule != 'assign' OR (SELECT grade FROM {assign} WHERE id = gi.iteminstance) != 0)",
             ['courseid' => $courseid]
         );
 
@@ -98,6 +102,7 @@ class get_students_competent_percentage extends external_api
                     'incompetent' => 0,
                     'inactive' => 0,
                 ],
+                'total_activities' => 0,
             ]];
         }
 
@@ -169,6 +174,7 @@ class get_students_competent_percentage extends external_api
                     'incompetent' => $incompetentcount,
                     'inactive' => $inactivecount,
                 ],
+                'total_activities' => $totalactivities,
             ]
         ];
     }
@@ -186,6 +192,7 @@ class get_students_competent_percentage extends external_api
                     'incompetent' => new external_value(PARAM_INT, 'Number of incompetent students'),
                     'inactive' => new external_value(PARAM_INT, 'Number of inactive students'),
                 ]),
+                'total_activities' => new external_value(PARAM_INT, 'Total number of graded activities'),
             ])
         ]);
     }

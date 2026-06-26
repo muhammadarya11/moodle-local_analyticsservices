@@ -74,6 +74,7 @@ class get_underperforming_course_activities extends external_api
                 AND cm.deletioninprogress = 0
                 AND gi.itemtype = 'mod'
                 AND gi.itemmodule IS NOT NULL
+                AND gi.gradetype != 0
             ORDER BY gi.itemname",
             ['courseid' => $courseid]
         );
@@ -124,14 +125,9 @@ class get_underperforming_course_activities extends external_api
             // Check each student's grade for this activity
             foreach ($students as $student) {
                 $grade = $grades_by_item[$module->gradeitemid][$student->id]['finalgrade'] ?? null;
-                $submittedbymodifier = $grades_by_item[$module->gradeitemid][$student->id]['usermodified'] ?? null;
 
-                if ($submittedbymodifier != null) {
+                if ($grade !== null) {
                     $students_submitted++;
-                }
-                // Count submitted (has a grade entry)
-                if ($grade != null) {
-                    // Check if competent (grade >= threshold)
                     if ($grade >= $params['competency_grade_threshold']) {
                         $students_competent++;
                     } else {
@@ -143,22 +139,14 @@ class get_underperforming_course_activities extends external_api
                             'email' => $student->email,
                         ];
                     }
-                } else {
-                    // No grade means incompetent
-                    $incompetent_students[] = [
-                        'id' => (int)$student->id,
-                        'firstname' => $student->firstname,
-                        'lastname' => $student->lastname,
-                        'email' => $student->email,
-                    ];
                 }
             }
 
-            // Calculate competent percentage (based on total students)
-            $competent_percentage = $totalstudents > 0 ? ($students_competent / $totalstudents) * 100 : 0;
+            // Calculate competent percentage (based on students submitted)
+            $competent_percentage = $students_submitted > 0 ? ($students_competent / $students_submitted) * 100 : 100;
 
             // Check if this activity is underperforming
-            if ($competent_percentage <= $params['max_competent_percentage']) {
+            if ($students_submitted > 0 && $competent_percentage <= $params['max_competent_percentage']) {
                 $underperforming_activities[] = [
                     'id' => (int)$module->cmid,
                     'name' => $module->name,

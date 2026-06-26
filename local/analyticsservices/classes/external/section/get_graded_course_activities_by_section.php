@@ -63,36 +63,86 @@ class get_graded_course_activities_by_section extends external_api
             ];
         }
 
-        // Ambil semua aktivitas yang memiliki grade item (modul apapun) di section ini.
-        $sql = "SELECT gi.id AS gradeitemid,
+        $sql = "SELECT cm.id AS cmid,
+                    m.name AS itemmodule,
+                    cm.instance AS iteminstance,
+                    COALESCE(gi.id, 0) AS gradeitemid,
                     gi.itemname,
-                    gi.itemmodule,
-                    gi.iteminstance,
-                    COUNT(DISTINCT CASE WHEN g.usermodified IS NOT NULL THEN g.userid END) AS students_submitted,
+                    gi.gradetype,
                     COUNT(DISTINCT CASE WHEN g.finalgrade IS NOT NULL THEN g.userid END) AS gradedcount 
-                FROM {grade_items} gi
-                JOIN {modules} m ON m.name = gi.itemmodule
-                JOIN {course_modules} cm ON cm.module = m.id
-                    AND cm.instance = gi.iteminstance
-                    AND cm.deletioninprogress = 0
-                    AND cm.section = :sectionid
+                FROM {course_modules} cm
+                JOIN {modules} m ON m.name = m.name AND cm.module = m.id
+                LEFT JOIN {grade_items} gi ON gi.itemmodule = m.name AND gi.iteminstance = cm.instance AND gi.courseid = cm.course
                 LEFT JOIN {grade_grades} g ON g.itemid = gi.id
-                WHERE gi.courseid = :courseid
-                    AND gi.itemtype = 'mod'
-                GROUP BY gi.id, gi.itemname, gi.itemmodule, gi.iteminstance
-                ORDER BY gi.itemmodule, gi.itemname";
+                WHERE cm.course = :courseid
+                  AND cm.section = :sectionid
+                  AND cm.deletioninprogress = 0
+                  AND m.name IN ('assign', 'quiz', 'forum', 'workshop', 'lesson', 'scorm')
+                GROUP BY cm.id, m.name, cm.instance, gi.id, gi.itemname, gi.gradetype";
 
         $records = $DB->get_records_sql($sql, ['courseid' => $courseid, 'sectionid' => $sectionid]);
 
         $results = [];
         foreach ($records as $r) {
+            $students_submitted = 0;
+            $name = $r->itemname;
+            $has_grading = false;
+
+            if ($r->gradeitemid && $r->gradetype != 0) {
+                $has_grading = true;
+            }
+
+            // Dapatkan jumlah submitted dan nama dari masing-masing modul
+            if ($r->itemmodule === 'assign') {
+                $assign = $DB->get_record('assign', ['id' => $r->iteminstance], 'name, grade');
+                if ($assign) {
+                    $name = $assign->name;
+                    $students_submitted = $DB->count_records_sql(
+                        "SELECT COUNT(DISTINCT userid) FROM {assign_submission} WHERE assignment = ? AND status = 'submitted'",
+                        [$r->iteminstance]
+                    );
+                    if ($assign->grade == 0) {
+                        $has_grading = false;
+                    }
+                }
+            } elseif ($r->itemmodule === 'quiz') {
+                $quiz = $DB->get_record('quiz', ['id' => $r->iteminstance], 'name');
+                if ($quiz) {
+                    $name = $quiz->name;
+                    $students_submitted = $DB->count_records_sql(
+                        "SELECT COUNT(DISTINCT userid) FROM {quiz_attempts} WHERE quiz = ? AND state = 'finished'",
+                        [$r->iteminstance]
+                    );
+                }
+            } elseif ($r->itemmodule === 'forum') {
+                $forum = $DB->get_record('forum', ['id' => $r->iteminstance], 'name');
+                if ($forum) {
+                    $name = $forum->name;
+                    $students_submitted = $DB->count_records_sql(
+                        "SELECT COUNT(DISTINCT p.userid) FROM {forum_posts} p JOIN {forum_discussions} d ON d.id = p.discussion WHERE d.forum = ?",
+                        [$r->iteminstance]
+                    );
+                }
+            } else {
+                // Untuk modul lain, gunakan log sederhana jika tidak ada tabel khusus
+                $students_submitted = $DB->count_records_sql(
+                    "SELECT COUNT(DISTINCT userid) FROM {logstore_standard_log} WHERE contextinstanceid = ? AND action IN ('submitted', 'viewed')",
+                    [$r->cmid]
+                );
+            }
+
+            if (empty($name)) {
+                $name = 'Unnamed activity';
+            }
+
             $results[] = [
                 'id' => (int)$r->iteminstance,
-                'name' => $r->itemname ?? 'Unnamed activity',
-                'module' => $r->itemmodule ?? 'unknown',
+                'name' => $name,
+                'module' => $r->itemmodule,
                 'total_students' => $totalstudents,
-                'students_submitted' => (int)$r->students_submitted,
-                'students_graded' => (int)$r->gradedcount
+                'students_submitted' => (int)$students_submitted,
+                'students_graded' => (int)$r->gradedcount,
+                'has_grading' => $has_grading
             ];
         }
 
@@ -130,6 +180,7 @@ class get_graded_course_activities_by_section extends external_api
                         'total_students' => new external_value(PARAM_INT, 'Total number of students in course'),
                         'students_submitted' => new external_value(PARAM_INT, 'Number of students who have submitted'),
                         'students_graded' => new external_value(PARAM_INT, 'Number of students who have been graded'),
+                        'has_grading' => new external_value(PARAM_BOOL, 'Whether the activity has grading')
                     ]),
                     'List of graded activities in the section'
                 )
