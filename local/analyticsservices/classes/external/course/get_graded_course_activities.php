@@ -56,6 +56,7 @@ class get_graded_course_activities extends external_api
             ];
         }
 
+        // Ambil semua aktivitas yang memiliki grade item (modul apapun).
         $sql = "SELECT cm.id AS cmid,
                     m.name AS itemmodule,
                     cm.instance AS iteminstance,
@@ -74,9 +75,23 @@ class get_graded_course_activities extends external_api
 
         $records = $DB->get_records_sql($sql, ['courseid' => $courseid]);
 
+        $gradeitemids = [];
+        foreach ($records as $r) {
+            if ($r->gradeitemid) {
+                $gradeitemids[] = $r->gradeitemid;
+            }
+        }
+        $grades_by_user = [];
+        if (!empty($gradeitemids)) {
+            list($gradeitem_sql, $gradeitem_params) = $DB->get_in_or_equal($gradeitemids, SQL_PARAMS_NAMED, 'giid');
+            $grades_all = $DB->get_records_sql("SELECT id, userid, itemid, finalgrade FROM {grade_grades} WHERE itemid $gradeitem_sql", $gradeitem_params);
+            foreach ($grades_all as $g) {
+                $grades_by_user[$g->userid][$g->itemid] = $g->finalgrade;
+            }
+        }
+
         $results = [];
         foreach ($records as $r) {
-            $students_submitted = 0;
             $name = $r->itemname;
             $has_grading = false;
 
@@ -84,15 +99,10 @@ class get_graded_course_activities extends external_api
                 $has_grading = true;
             }
 
-            // Dapatkan jumlah submitted dan nama dari masing-masing modul
             if ($r->itemmodule === 'assign') {
                 $assign = $DB->get_record('assign', ['id' => $r->iteminstance], 'name, grade');
                 if ($assign) {
                     $name = $assign->name;
-                    $students_submitted = $DB->count_records_sql(
-                        "SELECT COUNT(DISTINCT userid) FROM {assign_submission} WHERE assignment = ? AND status = 'submitted'",
-                        [$r->iteminstance]
-                    );
                     if ($assign->grade == 0) {
                         $has_grading = false;
                     }
@@ -101,31 +111,21 @@ class get_graded_course_activities extends external_api
                 $quiz = $DB->get_record('quiz', ['id' => $r->iteminstance], 'name');
                 if ($quiz) {
                     $name = $quiz->name;
-                    $students_submitted = $DB->count_records_sql(
-                        "SELECT COUNT(DISTINCT userid) FROM {quiz_attempts} WHERE quiz = ? AND state = 'finished'",
-                        [$r->iteminstance]
-                    );
                 }
             } elseif ($r->itemmodule === 'forum') {
                 $forum = $DB->get_record('forum', ['id' => $r->iteminstance], 'name');
                 if ($forum) {
                     $name = $forum->name;
-                    $students_submitted = $DB->count_records_sql(
-                        "SELECT COUNT(DISTINCT p.userid) FROM {forum_posts} p JOIN {forum_discussions} d ON d.id = p.discussion WHERE d.forum = ?",
-                        [$r->iteminstance]
-                    );
                 }
-            } else {
-                // Untuk modul lain, gunakan log sederhana jika tidak ada tabel khusus
-                $students_submitted = $DB->count_records_sql(
-                    "SELECT COUNT(DISTINCT userid) FROM {logstore_standard_log} WHERE contextinstanceid = ? AND action IN ('submitted', 'viewed')",
-                    [$r->cmid]
-                );
             }
 
             if (empty($name)) {
                 $name = 'Unnamed activity';
             }
+
+            $r->modname = $r->itemmodule;
+            $participated_users = helper::get_participated_users($r, $grades_by_user);
+            $students_submitted = count($participated_users);
 
             $results[] = [
                 'id' => (int)$r->iteminstance,

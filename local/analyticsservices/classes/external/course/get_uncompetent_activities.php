@@ -114,7 +114,7 @@ class get_uncompetent_activities extends external_api
                 if (
                     !isset($grades_by_item[$itemid][$sid]) ||
                     is_null($grades_by_item[$itemid][$sid]) ||
-                    $grades_by_item[$itemid][$sid] <= $threshold
+                    $grades_by_item[$itemid][$sid] < $threshold
                 ) {
                     $uncompetent++;
                 }

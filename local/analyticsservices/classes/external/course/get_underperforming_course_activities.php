@@ -1,7 +1,5 @@
 <?php
-
 namespace local_analyticsservices\external\course;
-
 use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
@@ -9,9 +7,7 @@ use core_external\external_value;
 use core_external\external_multiple_structure;
 use context_course;
 use local_analyticsservices\helper;
-
 defined('MOODLE_INTERNAL') || die();
-
 class get_underperforming_course_activities extends external_api
 {
     public static function execute_parameters()
@@ -22,27 +18,21 @@ class get_underperforming_course_activities extends external_api
             'max_competent_percentage' => new external_value(PARAM_FLOAT, 'Maximum percentage of competent students for an activity to be considered underperforming', VALUE_DEFAULT, 50.0),
         ]);
     }
-
     public static function execute($courseid, $competency_grade_threshold, $max_competent_percentage)
     {
         global $DB;
-
         // Validate parameters and context
         $params = self::validate_parameters(self::execute_parameters(), [
             'courseid' => $courseid,
             'competency_grade_threshold' => $competency_grade_threshold,
             'max_competent_percentage' => $max_competent_percentage,
         ]);
-
         $context = context_course::instance($courseid);
         self::validate_context($context);
-
         // Get Course Data
         $course = $DB->get_record('course', ['id' => $params['courseid']], 'id, fullname, shortname', MUST_EXIST);
-
         // Get all students in the course
         $students = helper::get_students_in_course($courseid);
-
         if (empty($students)) {
             return [
                 'course' => [
@@ -53,7 +43,6 @@ class get_underperforming_course_activities extends external_api
                 ]
             ];
         }
-
         // Get all graded activities (modules) in the course
         $modules = $DB->get_records_sql(
             "SELECT DISTINCT
@@ -78,7 +67,6 @@ class get_underperforming_course_activities extends external_api
             ORDER BY gi.itemname",
             ['courseid' => $courseid]
         );
-
         if (empty($modules)) {
             return [
                 'course' => [
@@ -89,49 +77,72 @@ class get_underperforming_course_activities extends external_api
                 ]
             ];
         }
-
         // Get all grades for all grade items at once
         list($gradeitem_sql, $gradeitem_params) = $DB->get_in_or_equal(
             array_column($modules, 'gradeitemid'),
             SQL_PARAMS_NAMED,
             'giid'
         );
-
         $grades_all = $DB->get_records_sql(
             "SELECT id, userid, itemid, usermodified, finalgrade
             FROM {grade_grades}
             WHERE itemid $gradeitem_sql",
             $gradeitem_params
         );
-
         // Index grades by item and user for fast access
         $grades_by_item = [];
+        $grades_by_user = [];
         foreach ($grades_all as $g) {
             $grades_by_item[$g->itemid][$g->userid] = [
                 'finalgrade' => $g->finalgrade,
                 'usermodified' => $g->usermodified,
             ];
+            $grades_by_user[$g->userid][$g->itemid] = $g->finalgrade;
         }
-
         $underperforming_activities = [];
         $totalstudents = count($students);
-
-        // Process each activity
         foreach ($modules as $module) {
+            if ($module->modname === 'assign') {
+                $assign = $DB->get_record('assign', ['id' => $module->iteminstance], 'grade');
+                if ($assign && $assign->grade == 0) {
+                    continue;
+                }
+            } elseif ($module->modname === 'quiz') {
+                $quiz = $DB->get_record('quiz', ['id' => $module->iteminstance], 'grade');
+                if ($quiz && $quiz->grade == 0) {
+                    continue;
+                }
+            } elseif ($module->modname === 'forum') {
+                $forum = $DB->get_record('forum', ['id' => $module->iteminstance], 'assessed');
+                if ($forum && $forum->assessed == 0) {
+                    continue;
+                }
+            } elseif ($module->modname === 'workshop') {
+                $workshop = $DB->get_record('workshop', ['id' => $module->iteminstance], 'grade, gradinggrade');
+                if ($workshop && $workshop->grade == 0 && $workshop->gradinggrade == 0) {
+                    continue;
+                }
+            } elseif ($module->modname === 'lesson') {
+                $lesson = $DB->get_record('lesson', ['id' => $module->iteminstance], 'grade');
+                if ($lesson && $lesson->grade == 0) {
+                    continue;
+                }
+            }
+            $participated_users = helper::get_participated_users($module, $grades_by_user);
             $students_submitted = 0;
             $students_competent = 0;
+            $students_actually_graded = 0;
             $incompetent_students = [];
-
-            // Check each student's grade for this activity
             foreach ($students as $student) {
-                $grade = $grades_by_item[$module->gradeitemid][$student->id]['finalgrade'] ?? null;
-
-                if ($grade !== null) {
+                if (!empty($participated_users[$student->id])) {
                     $students_submitted++;
-                    if ($grade >= $params['competency_grade_threshold']) {
+                    $grade = $grades_by_item[$module->gradeitemid][$student->id]['finalgrade'] ?? null;
+                    if ($grade !== null) {
+                        $students_actually_graded++;
+                    }
+                    if ($grade !== null && $grade >= $params['competency_grade_threshold']) {
                         $students_competent++;
                     } else {
-                        // This student is incompetent
                         $incompetent_students[] = [
                             'id' => (int)$student->id,
                             'firstname' => $student->firstname,
@@ -141,12 +152,11 @@ class get_underperforming_course_activities extends external_api
                     }
                 }
             }
-
             // Calculate competent percentage (based on students submitted)
             $competent_percentage = $students_submitted > 0 ? ($students_competent / $students_submitted) * 100 : 100;
-
-            // Check if this activity is underperforming
-            if ($students_submitted > 0 && $competent_percentage <= $params['max_competent_percentage']) {
+            $students_graded = $students_competent + count($incompetent_students);
+            // Check if this activity is underperforming (must have at least one student actually graded by the teacher)
+            if ($students_submitted > 0 && $students_actually_graded > 0 && $competent_percentage <= $params['max_competent_percentage']) {
                 $underperforming_activities[] = [
                     'id' => (int)$module->cmid,
                     'name' => $module->name,
@@ -167,7 +177,6 @@ class get_underperforming_course_activities extends external_api
             ]
         ];
     }
-
     public static function execute_returns()
     {
         return new external_single_structure([
