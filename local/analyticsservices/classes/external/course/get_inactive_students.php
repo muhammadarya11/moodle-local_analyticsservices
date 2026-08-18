@@ -1,4 +1,27 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * External function to get inactive students.
+ *
+ * @package   local_analyticsservices
+ * @copyright 2026, Arya Kusuma <muhammadaryakusuma@gmail.com>
+ * @copyright 2026, Safiyyah Yahya <safiyyahyahya163@gmail.com>
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 namespace local_analyticsservices\external\course;
 
@@ -8,86 +31,56 @@ use core_external\external_single_structure;
 use core_external\external_value;
 use core_external\external_multiple_structure;
 use context_course;
-
 use local_analyticsservices\helper;
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Class get_inactive_students.
+ */
+class get_inactive_students extends external_api {
 
-class get_inactive_students extends external_api
-{
-    public static function execute_parameters()
-    {
+    /**
+     * Define the parameters for execute.
+     *
+     * @return external_function_parameters
+     */
+    public static function execute_parameters() {
         return new external_function_parameters([
-            'courseid'        => new external_value(PARAM_INT, 'Course ID'),
-            'inactive_activity_rate' => new external_value(PARAM_FLOAT, 'Maximum percentage of graded activities completed to be considered a ghost student (0-100)', VALUE_DEFAULT, 20.0),
+            'courseid'               => new external_value(PARAM_INT, 'Course ID'),
+            'inactive_activity_rate' => new external_value(
+                PARAM_FLOAT,
+                'Maximum percentage of graded activities completed to be considered a ghost student (0-100).',
+                VALUE_DEFAULT,
+                20.0
+            ),
         ]);
     }
 
-    public static function execute($courseid, $inactive_activity_rate)
-    {
+    /**
+     * Execute the function.
+     *
+     * @param int $courseid Course ID.
+     * @param float $inactiveactivityrate Inactive activity rate.
+     * @return array
+     */
+    public static function execute($courseid, $inactiveactivityrate) {
         global $DB;
 
-        // Validate parameters and context course
+        // Validate parameters and context course.
         $params = self::validate_parameters(self::execute_parameters(), [
-            'courseid' => $courseid,
-            'inactive_activity_rate' => $inactive_activity_rate,
+            'courseid'               => $courseid,
+            'inactive_activity_rate' => $inactiveactivityrate,
         ]);
 
         $context = context_course::instance($courseid);
         self::validate_context($context);
+        require_capability('moodle/grade:viewall', $context);
 
-        // Get Course Data
+        // Get course data.
         $course = $DB->get_record('course', ['id' => $params['courseid']], 'id, fullname, shortname', MUST_EXIST);
 
         $students = helper::get_students_in_course($courseid);
 
         if (empty($students)) {
-            return ['course' => [
-                'id' => $course->id,
-                'fullname' => $course->fullname,
-                'shortname' => $course->shortname,
-                'students' => [],
-            ]];
-        }
-
-        // Ambil last access mahasiswa secara terpisah
-        $studentIds = array_keys($students);
-        list($inSql, $inParams) = $DB->get_in_or_equal($studentIds, SQL_PARAMS_NAMED, 'uid');
-        $inParams['courseid'] = $courseid;
-        $lastaccesses = $DB->get_records_sql(
-            "SELECT userid, timeaccess FROM {user_lastaccess} WHERE courseid = :courseid AND userid $inSql",
-            $inParams
-        );
-
-        // Ambil kegiatan berpenilaian
-        // Hantu ditentukan dari persentase kegiatan berpenilaian yang dikerjakan.
-        $graded_modules = $DB->get_records_sql(
-            "SELECT DISTINCT
-                gi.id AS gradeitemid,
-                gi.itemmodule AS modname,
-                cm.instance AS iteminstance,
-                cm.id AS cmid
-            FROM {grade_items} gi
-            JOIN {modules} m
-                ON m.name = gi.itemmodule
-            JOIN {course_modules} cm
-                ON cm.module = m.id
-                AND cm.instance = gi.iteminstance
-                AND cm.course = gi.courseid
-                AND cm.visible = 1
-            WHERE gi.courseid = :courseid
-                AND cm.deletioninprogress = 0
-                AND gi.itemtype = 'mod'
-                AND gi.itemmodule IS NOT NULL
-                AND gi.gradetype != 0
-                AND gi.grademax > 0
-                AND (gi.itemmodule != 'assign' OR (SELECT grade FROM {assign} WHERE id = gi.iteminstance) != 0)",
-            ['courseid' => $courseid]
-        );
-        $totalGradedActivities = count($graded_modules);
-
-        // Jika tidak ada kegiatan berpenilaian, tidak ada yang bisa dikategorikan hantu
-        if (empty($graded_modules)) {
             return ['course' => [
                 'id'        => $course->id,
                 'fullname'  => $course->fullname,
@@ -96,74 +89,118 @@ class get_inactive_students extends external_api
             ]];
         }
 
-        // Ambil semua grade untuk kegiatan berpenilaian
-        list($gradeitem_sql, $gradeitem_params) = $DB->get_in_or_equal(
-            array_column($graded_modules, 'gradeitemid'),
+        // Get student last access separately.
+        $studentids = array_keys($students);
+        list($insql, $inparams) = $DB->get_in_or_equal($studentids, SQL_PARAMS_NAMED, 'uid');
+        $inparams['courseid']   = $courseid;
+        $lastaccesses = $DB->get_records_sql(
+            "SELECT userid, timeaccess FROM {user_lastaccess} WHERE courseid = :courseid AND userid $insql",
+            $inparams
+        );
+
+        // Get graded activities.
+        $gradedmodules = $DB->get_records_sql(
+            "SELECT DISTINCT
+                gi.id AS gradeitemid,
+                gi.itemmodule AS modname,
+                cm.instance AS iteminstance,
+                cm.id AS cmid
+              FROM {grade_items} gi
+              JOIN {modules} m ON m.name = gi.itemmodule
+              JOIN {course_modules} cm ON cm.module = m.id
+                   AND cm.instance = gi.iteminstance
+                   AND cm.course = gi.courseid
+                   AND cm.visible = 1
+             WHERE gi.courseid = :courseid
+               AND cm.deletioninprogress = 0
+               AND gi.itemtype = 'mod'
+               AND gi.itemmodule IS NOT NULL
+               AND gi.gradetype != 0
+               AND gi.grademax > 0
+               AND (gi.itemmodule != 'assign'
+                    OR (SELECT grade FROM {assign} WHERE id = gi.iteminstance) != 0)",
+            ['courseid' => $courseid]
+        );
+        $totalgradedactivities = count($gradedmodules);
+
+        if (empty($gradedmodules)) {
+            return ['course' => [
+                'id'        => $course->id,
+                'fullname'  => $course->fullname,
+                'shortname' => $course->shortname,
+                'students'  => [],
+            ]];
+        }
+
+        // Get all grades for graded activities.
+        list($gradeitemsql, $gradeitemparams) = $DB->get_in_or_equal(
+            array_column($gradedmodules, 'gradeitemid'),
             SQL_PARAMS_NAMED,
             'giid'
         );
 
-        $grades_all = $DB->get_records_sql(
+        $gradesall = $DB->get_records_sql(
             "SELECT id, userid, itemid, finalgrade
-            FROM {grade_grades}
-            WHERE itemid $gradeitem_sql",
-            $gradeitem_params
+               FROM {grade_grades}
+              WHERE itemid $gradeitemsql",
+            $gradeitemparams
         );
 
-        // Index: [userid][gradeitemid] = finalgrade
-        $grades_by_user = [];
-        foreach ($grades_all as $g) {
-            $grades_by_user[$g->userid][$g->itemid] = $g->finalgrade;
+        $gradesbyuser = [];
+        foreach ($gradesall as $g) {
+            $gradesbyuser[$g->userid][$g->itemid] = $g->finalgrade;
         }
 
-        $participated_by_module = [];
-        foreach ($graded_modules as $module) {
-            $participated_by_module[$module->gradeitemid] = helper::get_participated_users($module, $grades_by_user);
+        $participatedbymodule = [];
+        foreach ($gradedmodules as $module) {
+            $participatedbymodule[$module->gradeitemid] = helper::get_participated_users($module, $gradesbyuser);
         }
-        
-        // Filter mahasiswa yang masuk kategori hantu
-        // Hantu: mengerjakan/mengumpulkan <= inactive_activity_rate% dari total kegiatan berpenilaian
+
+        // Filter inactive/ghost students.
         $inactivestudents = [];
 
         foreach ($students as $student) {
-            $uid        = $student->id;
+            $uid = $student->id;
 
-            $gradedParticipated = 0;
-            foreach ($graded_modules as $module) {
-                // Partisipasi: sudah mengerjakan/submit ATAU sudah diberi nilai oleh dosen
-                if (!empty($participated_by_module[$module->gradeitemid][$uid])) {
-                    $gradedParticipated++;
+            $gradedparticipated = 0;
+            foreach ($gradedmodules as $module) {
+                if (!empty($participatedbymodule[$module->gradeitemid][$uid])) {
+                    $gradedparticipated++;
                 }
             }
 
-            $participationRate = ($gradedParticipated / $totalGradedActivities) * 100;
+            $participationrate = ($gradedparticipated / $totalgradedactivities) * 100;
 
-            if ($participationRate <= $params['inactive_activity_rate']) {
+            if ($participationrate <= $params['inactive_activity_rate']) {
                 $inactivestudents[] = [
-                    'id' => $student->id,
-                    'firstname' => $student->firstname,
-                    'lastname' => $student->lastname,
-                    'email' => $student->email,
-                    'lastaccess' => $lastaccesses[$uid]->timeaccess ?? null,
-                    'participatedactivities' => $gradedParticipated,
-                    'totalactivities' => $totalGradedActivities,
-                    'participationrate' => round($participationRate, 2),
+                    'id'                     => $student->id,
+                    'firstname'              => $student->firstname,
+                    'lastname'               => $student->lastname,
+                    'email'                  => $student->email,
+                    'lastaccess'             => $lastaccesses[$uid]->timeaccess ?? null,
+                    'participatedactivities' => $gradedparticipated,
+                    'totalactivities'        => $totalgradedactivities,
+                    'participationrate'      => round($participationrate, 2),
                 ];
             }
         }
 
         return [
             'course' => [
-                'id' => $course->id,
-                'fullname' => $course->fullname,
+                'id'        => $course->id,
+                'fullname'  => $course->fullname,
                 'shortname' => $course->shortname,
-                'students' => $inactivestudents,
-            ]
+                'students'  => $inactivestudents,
+            ],
         ];
     }
 
-    public static function execute_returns()
-    {
+    /**
+     * Define the return structure.
+     *
+     * @return external_single_structure
+     */
+    public static function execute_returns() {
         return new external_single_structure([
             'course' => new external_single_structure([
                 'id'        => new external_value(PARAM_INT, 'Course ID'),
@@ -171,16 +208,16 @@ class get_inactive_students extends external_api
                 'shortname' => new external_value(PARAM_TEXT, 'Course short name'),
                 'students'  => new external_multiple_structure(
                     new external_single_structure([
-                        'id' => new external_value(PARAM_INT, 'Student ID'),
-                        'firstname' => new external_value(PARAM_TEXT, 'Student first name'),
-                        'lastname' => new external_value(PARAM_TEXT, 'Student last name'),
-                        'email' => new external_value(PARAM_TEXT, 'Student email'),
-                        'lastaccess' => new external_value(PARAM_INT, 'Last access timestamp', VALUE_OPTIONAL),
-                        'participatedactivities' => new external_value(PARAM_INT, 'Number of graded activities completed'),
-                        'totalactivities' => new external_value(PARAM_INT, 'Total number of graded activities in course'),
-                        'participationrate' => new external_value(PARAM_FLOAT, 'Participation rate in graded activities (%)'),
+                        'id'                     => new external_value(PARAM_INT, 'Student ID'),
+                        'firstname'              => new external_value(PARAM_TEXT, 'Student first name'),
+                        'lastname'               => new external_value(PARAM_TEXT, 'Student last name'),
+                        'email'                  => new external_value(PARAM_TEXT, 'Student email'),
+                        'lastaccess'             => new external_value(PARAM_INT, 'Last access timestamp.', VALUE_OPTIONAL),
+                        'participatedactivities' => new external_value(PARAM_INT, 'Number of graded activities completed.'),
+                        'totalactivities'        => new external_value(PARAM_INT, 'Total number of graded activities in course.'),
+                        'participationrate'      => new external_value(PARAM_FLOAT, 'Participation rate in activities (%).'),
                     ]),
-                    'List of ghost/inactive students'
+                    'List of ghost/inactive students.'
                 ),
             ]),
         ]);

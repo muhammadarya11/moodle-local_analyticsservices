@@ -1,4 +1,27 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * External function to get course access by time period.
+ *
+ * @package   local_analyticsservices
+ * @copyright 2026, Arya Kusuma <muhammadaryakusuma@gmail.com>
+ * @copyright 2026, Safiyyah Yahya <safiyyahyahya163@gmail.com>
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 namespace local_analyticsservices\external\course;
 
@@ -8,92 +31,112 @@ use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
 use context_course;
+use core\exception\invalid_parameter_exception;
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Class get_course_access_by_timeperiod.
+ */
+class get_course_access_by_timeperiod extends external_api {
 
-
-class get_course_access_by_timeperiod extends external_api
-{
     /**
-     * Parameter function.
+     * Define the parameters for execute.
+     *
+     * @return external_function_parameters
      */
-    public static function execute_parameters()
-    {
+    public static function execute_parameters() {
         return new external_function_parameters([
-            'courseid' => new external_value(PARAM_INT, 'Course ID'),
+            'courseid'       => new external_value(PARAM_INT, 'Course ID'),
             'unique_by_user' => new external_value(PARAM_BOOL, 'Count only one log per user', VALUE_DEFAULT, true),
-            'periods' => new external_single_structure([
-                'pagi' => new external_single_structure([
-                    'start' => new external_value(PARAM_RAW, 'Jam mulai pagi (format HH:MM)', VALUE_DEFAULT, '05:00'),
-                    'end'   => new external_value(PARAM_RAW, 'Jam akhir pagi (format HH:MM)', VALUE_DEFAULT, '07:59'),
+            'periods'        => new external_single_structure([
+                'pagi'  => new external_single_structure([
+                    'start' => new external_value(PARAM_TEXT, 'Jam mulai pagi (format HH:MM).', VALUE_DEFAULT, '05:00'),
+                    'end'   => new external_value(PARAM_TEXT, 'Jam akhir pagi (format HH:MM).', VALUE_DEFAULT, '07:59'),
                 ]),
                 'siang' => new external_single_structure([
-                    'start' => new external_value(PARAM_RAW, 'Jam mulai siang (format HH:MM)', VALUE_DEFAULT, '08:00'),
-                    'end'   => new external_value(PARAM_RAW, 'Jam akhir siang (format HH:MM)', VALUE_DEFAULT, '15:59'),
+                    'start' => new external_value(PARAM_TEXT, 'Jam mulai siang (format HH:MM).', VALUE_DEFAULT, '08:00'),
+                    'end'   => new external_value(PARAM_TEXT, 'Jam akhir siang (format HH:MM).', VALUE_DEFAULT, '15:59'),
                 ]),
                 'malam' => new external_single_structure([
-                    'start' => new external_value(PARAM_RAW, 'Jam mulai malam (format HH:MM)', VALUE_DEFAULT, '16:00'),
-                    'end'   => new external_value(PARAM_RAW, 'Jam akhir malam (format HH:MM)', VALUE_DEFAULT, '04:59'),
+                    'start' => new external_value(PARAM_TEXT, 'Jam mulai malam (format HH:MM).', VALUE_DEFAULT, '16:00'),
+                    'end'   => new external_value(PARAM_TEXT, 'Jam akhir malam (format HH:MM).', VALUE_DEFAULT, '04:59'),
                 ]),
-            ], 'Konfigurasi rentang waktu harian', VALUE_DEFAULT, []),
+            ], 'Konfigurasi rentang waktu harian.', VALUE_DEFAULT, []),
         ]);
     }
 
     /**
-     * Eksekusi utama.
+     * Execute the function.
+     *
+     * @param int $courseid Course ID.
+     * @param bool $uniquebyuser Count unique users.
+     * @param array $periods Time period configuration.
+     * @return array
      */
-    public static function execute($courseid, $unique_by_user = true, $periods = [])
-    {
+    public static function execute($courseid, $uniquebyuser = true, $periods = []) {
         global $DB;
 
         $params = self::validate_parameters(self::execute_parameters(), [
-            'courseid' => $courseid,
-            'unique_by_user' => $unique_by_user,
-            'periods' => $periods,
+            'courseid'       => $courseid,
+            'unique_by_user' => $uniquebyuser,
+            'periods'        => $periods,
         ]);
 
         $context = context_course::instance($courseid);
         self::validate_context($context);
+        require_capability('report/log:view', $context);
 
         $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname', MUST_EXIST);
 
-        // Ambil log "viewed" untuk course terkait.
+        // Get "viewed" logs for the related course.
         $records = $DB->get_records_sql(
-            "SELECT id, userid, timecreated FROM {logstore_standard_log}
-            WHERE courseid = :courseid AND action = :action",
+            "SELECT id, userid, timecreated
+               FROM {logstore_standard_log}
+              WHERE courseid = :courseid AND action = :action",
             [
                 'courseid' => $courseid,
-                'action' => 'viewed'
+                'action'   => 'viewed',
             ]
         );
 
-        $periodConfig = $params['periods'] ?: [
-            'pagi' => ['start' => '05:00', 'end' => '07:59'],
+        $periodconfig = $params['periods'] ?: [
+            'pagi'  => ['start' => '05:00', 'end' => '07:59'],
             'siang' => ['start' => '08:00', 'end' => '15:59'],
-            'malam' => ['start' => '16:00', 'end' => '04:59']
+            'malam' => ['start' => '16:00', 'end' => '04:59'],
         ];
 
-        $periods = array_fill_keys(array_keys($periodConfig), []);
+        // Validate that all period time values match HH:MM format.
+        $timeregex = '/^([01]\d|2[0-3]):[0-5]\d$/';
+        foreach ($periodconfig as $periodname => $range) {
+            foreach (['start', 'end'] as $key) {
+                if (!preg_match($timeregex, $range[$key])) {
+                    throw new invalid_parameter_exception(
+                        "Invalid time format for period '$periodname.$key': '{$range[$key]}'. Expected HH:MM."
+                    );
+                }
+            }
+        }
 
-        // Proses setiap record log.
+        $periods = array_fill_keys(array_keys($periodconfig), []);
+
+        // Process each log record.
         foreach ($records as $record) {
-            $hour = (int) userdate($record->timecreated, '%H');
+            $hour   = (int) userdate($record->timecreated, '%H');
             $minute = (int) userdate($record->timecreated, '%M');
-            $time = sprintf('%02d:%02d', $hour, $minute);
+            $time   = sprintf('%02d:%02d', $hour, $minute);
 
-            foreach ($periodConfig as $key => $range) {
+            foreach ($periodconfig as $key => $range) {
                 $start = $range['start'];
-                $end = $range['end'];
+                $end   = $range['end'];
 
-                $inRange = false;
+                $inrange = false;
                 if ($start < $end) {
-                    $inRange = ($time >= $start && $time <= $end);
+                    $inrange = ($time >= $start && $time <= $end);
                 } else {
-                    $inRange = ($time >= $start || $time <= $end);
+                    $inrange = ($time >= $start || $time <= $end);
                 }
 
-                if ($inRange) {
-                    if ($unique_by_user) {
+                if ($inrange) {
+                    if ($uniquebyuser) {
                         $periods[$key][$record->userid] = true;
                     } else {
                         $periods[$key][] = $record->userid;
@@ -103,42 +146,42 @@ class get_course_access_by_timeperiod extends external_api
             }
         }
 
-        // Hitung hasil akhir.
+        // Calculate final results.
         $results = [];
         foreach ($periods as $period => $data) {
-            $count = $unique_by_user ? count($data) : count($data);
             $results[] = [
-                'period' => $period,
-                'access_count' => $count
+                'period'       => $period,
+                'access_count' => count($data),
             ];
         }
 
         return [
             'course' => [
-                'id' => $course->id,
-                'fullname' => $course->fullname,
-                'shortname' => $course->shortname,
-                'time_periods' => $results
+                'id'           => $course->id,
+                'fullname'     => $course->fullname,
+                'shortname'    => $course->shortname,
+                'time_periods' => $results,
             ],
         ];
     }
 
     /**
-     * Struktur output.
+     * Define the return structure.
+     *
+     * @return external_single_structure
      */
-    public static function execute_returns()
-    {
+    public static function execute_returns() {
         return new external_single_structure([
             'course' => new external_single_structure([
-                'id' => new external_value(PARAM_INT, 'Course ID'),
-                'fullname' => new external_value(PARAM_TEXT, 'Full name of the course'),
-                'shortname' => new external_value(PARAM_TEXT, 'Short name of the course'),
+                'id'           => new external_value(PARAM_INT, 'Course ID'),
+                'fullname'     => new external_value(PARAM_TEXT, 'Full name of the course'),
+                'shortname'    => new external_value(PARAM_TEXT, 'Short name of the course'),
                 'time_periods' => new external_multiple_structure(
                     new external_single_structure([
-                        'period' => new external_value(PARAM_TEXT, 'Nama periode waktu'),
-                        'access_count' => new external_value(PARAM_INT, 'Jumlah akses atau user unik pada periode tersebut')
+                        'period'       => new external_value(PARAM_TEXT, 'Nama periode waktu.'),
+                        'access_count' => new external_value(PARAM_INT, 'Jumlah akses atau user unik pada periode tersebut.'),
                     ])
-                )
+                ),
             ]),
         ]);
     }

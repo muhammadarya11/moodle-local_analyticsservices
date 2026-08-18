@@ -15,19 +15,22 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * @package   plugintype_pluginname
- * @copyright 2020, You Name <your@email.address>
+ * Plugin version information for local_analyticsservices.
+ *
+ * @package   local_analyticsservices
+ * @copyright 2026, Arya Kusuma <muhammadaryakusuma@gmail.com>
+ * @copyright 2026, Safiyyah Yahya <safiyyahyahya163@gmail.com>
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version = 2026012701;
-$plugin->release = '1';
+$plugin->version = 20260721000;
+$plugin->release = '1.8';
 $plugin->requires = 2024100700; // Requires Moodle 4.5.0.
 $plugin->component = 'local_analyticsservices';
 $plugin->maturity = MATURITY_STABLE;
 
 $plugin->dependencies = [
-    'local_modcustomfields' => 2023110600 // Custom fields for activity modules Version 6
+    'local_modcustomfields' => 2023110600, // Custom fields for activity modules Version 6.
 ];
