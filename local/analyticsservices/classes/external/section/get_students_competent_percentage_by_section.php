@@ -191,10 +191,7 @@ class get_students_competent_percentage_by_section extends external_api {
             $gradesbyuser[$g->userid][$g->itemid] = $g->finalgrade;
         }
 
-        $participatedbymodule = [];
-        foreach ($gradedmodules as $module) {
-            $participatedbymodule[$module->gradeitemid] = helper::get_participated_users($module, $gradesbyuser);
-        }
+        $participatedbymodule = helper::get_all_participated_users_in_course($courseid, $gradedmodules, $gradesbyuser);
 
         // Categorise each student.
         list($competentcount, $incompetentcount, $inactivecount) = helper::calculate_student_competency_stats(

@@ -172,4 +172,14 @@ $functions = [
         'loginrequired' => true,
         'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE],
     ],
+    'local_analyticsservices_get_active_course_ids_since' => [
+        'classname' => 'local_analyticsservices\external\course\get_active_course_ids_since',
+        'methodname' => 'execute',
+        'classpath' => 'local/analyticsservices/classes/external/course/get_active_course_ids_since.php',
+        'description' => 'Retrieve the IDs of courses that have recent log or grade activity',
+        'type' => 'read',
+        'ajax' => true,
+        'loginrequired' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE],
+    ],
 ];

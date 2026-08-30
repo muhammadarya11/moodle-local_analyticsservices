@@ -167,9 +167,9 @@ class get_students_competent_percentage extends external_api {
         );
 
         $gradesall = $DB->get_records_sql(
-            "SELECT id, userid, itemid, finalgrade
+            "SELECT id, userid, itemid, COALESCE(finalgrade, rawgrade) AS finalgrade
                FROM {grade_grades}
-              WHERE itemid $gradeitemsql",
+              WHERE itemid $gradeitemsql AND (finalgrade IS NOT NULL OR rawgrade IS NOT NULL)",
             $gradeitemparams
         );
 
@@ -178,10 +178,7 @@ class get_students_competent_percentage extends external_api {
             $gradesbyuser[$g->userid][$g->itemid] = $g->finalgrade;
         }
 
-        $participatedbymodule = [];
-        foreach ($gradedmodules as $module) {
-            $participatedbymodule[$module->gradeitemid] = helper::get_participated_users($module, $gradesbyuser);
-        }
+        $participatedbymodule = helper::get_all_participated_users_in_course($courseid, $gradedmodules, $gradesbyuser);
 
         // Categorize each student.
         list($competentcount, $incompetentcount, $inactivecount) = helper::calculate_student_competency_stats(

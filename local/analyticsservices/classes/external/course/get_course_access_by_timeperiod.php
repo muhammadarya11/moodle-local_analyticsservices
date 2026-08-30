@@ -87,25 +87,15 @@ class get_course_access_by_timeperiod extends external_api {
 
         $course = $DB->get_record('course', ['id' => $courseid], 'id, fullname, shortname', MUST_EXIST);
 
-        // Get "viewed" logs for the related course.
-        $records = $DB->get_records_sql(
-            "SELECT id, userid, timecreated
-               FROM {logstore_standard_log}
-              WHERE courseid = :courseid AND action = :action",
-            [
-                'courseid' => $courseid,
-                'action'   => 'viewed',
-            ]
-        );
-
         $periodconfig = $params['periods'] ?: [
             'pagi'  => ['start' => '05:00', 'end' => '07:59'],
             'siang' => ['start' => '08:00', 'end' => '15:59'],
             'malam' => ['start' => '16:00', 'end' => '04:59'],
         ];
 
-        // Validate that all period time values match HH:MM format.
+        // Validasi format.
         $timeregex = '/^([01]\d|2[0-3]):[0-5]\d$/';
+        $periodconfigminutes = [];
         foreach ($periodconfig as $periodname => $range) {
             foreach (['start', 'end'] as $key) {
                 if (!preg_match($timeregex, $range[$key])) {
@@ -114,44 +104,56 @@ class get_course_access_by_timeperiod extends external_api {
                     );
                 }
             }
+
+            $startparts = explode(':', $range['start']);
+            $endparts   = explode(':', $range['end']);
+            $periodconfigminutes[$periodname] = [
+                'start' => (int)$startparts[0] * 60 + (int)$startparts[1],
+                'end'   => (int)$endparts[0] * 60 + (int)$endparts[1],
+            ];
         }
 
-        $periods = array_fill_keys(array_keys($periodconfig), []);
+        // OPTIMASI: Pindahkan logika klasifikasi waktu dari PHP murni ke dalam SQL Engine.
+        $tz = \core_date::get_user_timezone_object();
+        $offset = $tz->getOffset(new \DateTime('now', new \DateTimeZone('UTC')));
 
-        // Process each log record.
-        foreach ($records as $record) {
-            $hour   = (int) userdate($record->timecreated, '%H');
-            $minute = (int) userdate($record->timecreated, '%M');
-            $time   = sprintf('%02d:%02d', $hour, $minute);
+        // Kita gunakan $DB->sql_modulo() agar cross-database compatible (MySQL & Postgres).
+        $modulo = $DB->sql_modulo("timecreated + $offset", 86400);
 
-            foreach ($periodconfig as $key => $range) {
-                $start = $range['start'];
-                $end   = $range['end'];
+        // Memaksa floor int behavior pada database.
+        $localminute = "FLOOR($modulo / 60)";
 
-                $inrange = false;
-                if ($start < $end) {
-                    $inrange = ($time >= $start && $time <= $end);
-                } else {
-                    $inrange = ($time >= $start || $time <= $end);
-                }
+        $selects = [];
+        foreach ($periodconfigminutes as $key => $range) {
+            $start = $range['start'];
+            $end = $range['end'];
 
-                if ($inrange) {
-                    if ($uniquebyuser) {
-                        $periods[$key][$record->userid] = true;
-                    } else {
-                        $periods[$key][] = $record->userid;
-                    }
-                    break;
-                }
+            if ($start <= $end) {
+                $cond = "($localminute >= $start AND $localminute <= $end)";
+            } else {
+                $cond = "($localminute >= $start OR $localminute <= $end)";
+            }
+
+            if ($params['unique_by_user']) {
+                $selects[] = "COUNT(DISTINCT CASE WHEN $cond THEN userid END) AS {$key}_count";
+            } else {
+                $selects[] = "COUNT(CASE WHEN $cond THEN userid END) AS {$key}_count";
             }
         }
 
-        // Calculate final results.
+        $sql = "SELECT " . implode(', ', $selects) . "
+                FROM {logstore_standard_log}
+                WHERE courseid = :courseid AND action = 'viewed'";
+
+        // Hit ratusan ribu baris akan dihitung instan oleh SQL.
+        $record = $DB->get_record_sql($sql, ['courseid' => $courseid]);
+
         $results = [];
-        foreach ($periods as $period => $data) {
+        foreach ($periodconfig as $period => $data) {
+            $field = "{$period}_count";
             $results[] = [
                 'period'       => $period,
-                'access_count' => count($data),
+                'access_count' => (int) ($record->$field ?? 0),
             ];
         }
 

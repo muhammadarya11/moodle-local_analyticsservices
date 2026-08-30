@@ -59,21 +59,17 @@ class get_graded_course_activities extends external_api {
         global $DB;
 
         $params = self::validate_parameters(self::execute_parameters(), [
-            'courseid' => $courseid,
+        'courseid' => $courseid,
         ]);
 
-        $context = context_course::instance($courseid);
+        $context = context_course::instance($params['courseid']);
         self::validate_context($context);
-        require_capability('moodle/grade:viewall', $context);
+        require_capability('moodle/course:viewhiddencourses', $context);
 
-        // Get course data.
         $course = $DB->get_record('course', ['id' => $params['courseid']], 'id, fullname, shortname', MUST_EXIST);
-
-        // Get students enrolled in this course.
         $students      = helper::get_students_in_course($params['courseid']);
-        $totalstudents = count($students);
 
-        if ($totalstudents == 0) {
+        if (empty($students)) {
             return [
                 'course' => [
                     'id'         => $params['courseid'],
@@ -84,55 +80,80 @@ class get_graded_course_activities extends external_api {
             ];
         }
 
-        // Get all activities that have a grade item.
+        // Optimasi: Memecahkan SQL raksasa menjadi 3 SQL sederhana.
+        // Ambil struktur activity saja.
         $sql = "SELECT cm.id AS cmid,
-                    m.name AS itemmodule,
+                    m.name AS modname,
                     cm.instance AS iteminstance,
                     COALESCE(gi.id, 0) AS gradeitemid,
                     gi.itemname,
-                    gi.gradetype,
-                    COUNT(DISTINCT CASE WHEN g.finalgrade IS NOT NULL THEN g.userid END) AS gradedcount
+                    gi.gradetype
                 FROM {course_modules} cm
-                JOIN {modules} m ON m.name = m.name AND cm.module = m.id
+                JOIN {modules} m ON cm.module = m.id
                 LEFT JOIN {grade_items} gi ON gi.itemmodule = m.name
                     AND gi.iteminstance = cm.instance
                     AND gi.courseid = cm.course
-                LEFT JOIN {grade_grades} g ON g.itemid = gi.id
                 WHERE cm.course = :courseid
                   AND cm.deletioninprogress = 0
-                  AND m.name IN ('assign', 'quiz', 'forum', 'workshop', 'lesson', 'scorm')
-                GROUP BY cm.id, m.name, cm.instance, gi.id, gi.itemname, gi.gradetype";
+                  AND m.name IN ('assign', 'quiz', 'forum', 'workshop', 'lesson', 'scorm')";
 
         $records = $DB->get_records_sql($sql, ['courseid' => $params['courseid']]);
 
         $gradeitemids = [];
         foreach ($records as $r) {
+            $r->gradedcount = 0; // Default awal.
             if ($r->gradeitemid) {
                 $gradeitemids[] = $r->gradeitemid;
             }
         }
 
         $gradesbyuser = [];
-        if (!empty($gradeitemids)) {
-            list($gradeitemsql, $gradeitemparams) = $DB->get_in_or_equal($gradeitemids, SQL_PARAMS_NAMED, 'giid');
-            $gradesall = $DB->get_records_sql(
-                "SELECT id, userid, itemid, finalgrade FROM {grade_grades} WHERE itemid $gradeitemsql",
-                $gradeitemparams
-            );
+        $studentids = array_keys($students);
+
+        if (!empty($gradeitemids) && !empty($studentids)) {
+            list($insqlgi, $paramsgi) = $DB->get_in_or_equal($gradeitemids, SQL_PARAMS_NAMED, 'giid0');
+            list($insqlu, $paramsu)  = $DB->get_in_or_equal($studentids, SQL_PARAMS_NAMED, 'uid0');
+            $sqlparams = array_merge($paramsgi, $paramsu);
+
+            // Ambil nilai hanya untuk mahasiswa aktif dan activity yang terdaftar.
+            $sqlgrades = "SELECT id, itemid, userid, COALESCE(finalgrade, rawgrade) AS finalgrade
+                           FROM {grade_grades}
+                           WHERE itemid $insqlgi AND userid $insqlu AND (finalgrade IS NOT NULL OR rawgrade IS NOT NULL)";
+
+            $gradesall = $DB->get_records_sql($sqlgrades, $sqlparams);
+
             foreach ($gradesall as $g) {
                 $gradesbyuser[$g->userid][$g->itemid] = $g->finalgrade;
             }
+
+            // Ambil jumlah ter-grading per activity.
+            $sqlcount = "SELECT itemid, COUNT(DISTINCT userid) AS gradedcount
+                          FROM {grade_grades}
+                          WHERE itemid $insqlgi AND userid $insqlu AND (finalgrade IS NOT NULL OR rawgrade IS NOT NULL)
+                          GROUP BY itemid";
+            $counts = $DB->get_records_sql($sqlcount, $sqlparams);
+
+            foreach ($records as $r) {
+                if ($r->gradeitemid && isset($counts[$r->gradeitemid])) {
+                    $r->gradedcount = $counts[$r->gradeitemid]->gradedcount;
+                }
+            }
         }
 
-        $results = helper::format_graded_activities_results($records, $gradesbyuser, $students);
+        $results = helper::format_graded_activities_results(
+            $params['courseid'],
+            $records,
+            $gradesbyuser,
+            $students
+        );
 
         return [
-            'course' => [
-                'id'         => $params['courseid'],
-                'name'       => $course->fullname,
-                'shortname'  => $course->shortname,
-                'activities' => $results,
-            ],
+        'course' => [
+            'id'         => $params['courseid'],
+            'name'       => $course->fullname,
+            'shortname'  => $course->shortname,
+            'activities' => $results,
+        ],
         ];
     }
 

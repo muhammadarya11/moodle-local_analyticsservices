@@ -34,13 +34,14 @@ use DateTime;
 class helper {
 
     /**
-     * Ambil daftar student di course.
+     * Ambil daftar student di course (hanya yang aktif terenrol).
      *
      * @param int $courseid Course ID.
      * @return array daftar user object.
      */
     public static function get_students_in_course(int $courseid): array {
-        global $DB;
+        global $DB, $CFG;
+        require_once($CFG->dirroot . '/lib/enrollib.php');
 
         $context = context_course::instance($courseid);
 
@@ -50,10 +51,26 @@ class helper {
             $studentroleid = 5;
         }
 
-        // Mengembalikan array keyed by user ID.
-        $students = get_role_users($studentroleid, $context, false, 'u.id, u.firstname, u.lastname, u.email', 'u.id');
+        // Dapatkan daftar pengguna yang ditugaskan sebagai student (mengabaikan status enrol).
+        $roleusers = get_role_users($studentroleid, $context, false, 'u.id', 'u.id');
+        if (empty($roleusers)) {
+            return [];
+        }
 
-        return $students ?: [];
+        // Dapatkan daftar pengguna yang BENAR-BENAR AKTIF ENROLMENT-NYA (tidak tersuspend)
+        // Parameter ke-8 (true) memastikan hanya pengguna aktif yang ditarik!
+        $enrolledusers = get_enrolled_users($context, '', 0, 'u.id, u.firstname, u.lastname, u.email', null, 0, 0, true);
+
+        // Gabungkan keduanya (Irisan).
+        $students = [];
+        foreach ($enrolledusers as $user) {
+            // Jika dia aktif DAN dia adalah student (bukan dosen), masukkan ke dalam array!
+            if (isset($roleusers[$user->id])) {
+                $students[$user->id] = $user;
+            }
+        }
+
+        return $students;
     }
 
     /**
@@ -128,6 +145,122 @@ class helper {
         }
 
         return $participated;
+    }
+
+    /**
+     * Get all participated users for multiple graded modules in one bulk query.
+     * This eliminates N+1 queries when calculating course analytics.
+     *
+     * @param int $courseid Course ID.
+     * @param array $gradedmodules Array of graded module records.
+     * @param array $gradesbyuser Nested array [userid][gradeitemid] = finalgrade.
+     * @return array Nested array [gradeitemid][userid] = true.
+     */
+    public static function get_all_participated_users_in_course(int $courseid, array $gradedmodules, array $gradesbyuser): array {
+        global $DB;
+        $participatedbymodule = [];
+
+        foreach ($gradedmodules as $module) {
+            $participatedbymodule[$module->gradeitemid] = [];
+        }
+
+        $assigns = [];
+        $quizzes = [];
+        $forums = [];
+        $othercmids = [];
+
+        foreach ($gradedmodules as $module) {
+            if ($module->modname === 'assign') {
+                $assigns[$module->iteminstance] = $module->gradeitemid;
+            } else if ($module->modname === 'quiz') {
+                $quizzes[$module->iteminstance] = $module->gradeitemid;
+            } else if ($module->modname === 'forum') {
+                $forums[$module->iteminstance] = $module->gradeitemid;
+            } else {
+                $othercmids[$module->cmid] = $module->gradeitemid;
+            }
+        }
+
+        // Bulk fetch assign submissions.
+        if (!empty($assigns)) {
+            list($insql, $inparams) = $DB->get_in_or_equal(array_keys($assigns), SQL_PARAMS_NAMED, 'assign');
+            $rs = $DB->get_recordset_sql(
+                "SELECT DISTINCT userid, assignment
+                   FROM {assign_submission}
+                  WHERE assignment $insql AND status = 'submitted'",
+                $inparams
+            );
+            foreach ($rs as $r) {
+                $gradeitemid = $assigns[$r->assignment];
+                $participatedbymodule[$gradeitemid][$r->userid] = true;
+            }
+            $rs->close();
+        }
+
+        // Bulk fetch quizzes.
+        if (!empty($quizzes)) {
+            list($insql, $inparams) = $DB->get_in_or_equal(array_keys($quizzes), SQL_PARAMS_NAMED, 'quiz');
+            $rs = $DB->get_recordset_sql(
+                "SELECT DISTINCT userid, quiz
+                   FROM {quiz_attempts}
+                  WHERE quiz $insql AND state = 'finished' AND preview = 0",
+                $inparams
+            );
+            foreach ($rs as $r) {
+                $gradeitemid = $quizzes[$r->quiz];
+                $participatedbymodule[$gradeitemid][$r->userid] = true;
+            }
+            $rs->close();
+        }
+
+        // Bulk fetch forums.
+        if (!empty($forums)) {
+            list($insql, $inparams) = $DB->get_in_or_equal(array_keys($forums), SQL_PARAMS_NAMED, 'forum');
+            $rs = $DB->get_recordset_sql(
+                "SELECT DISTINCT p.userid, d.forum
+                   FROM {forum_posts} p
+                   JOIN {forum_discussions} d ON d.id = p.discussion
+                  WHERE d.forum $insql",
+                $inparams
+            );
+            foreach ($rs as $r) {
+                $gradeitemid = $forums[$r->forum];
+                $participatedbymodule[$gradeitemid][$r->userid] = true;
+            }
+            $rs->close();
+        }
+
+        // Bulk fetch others from logstore_standard_log.
+        if (!empty($othercmids)) {
+            list($insql, $inparams) = $DB->get_in_or_equal(array_keys($othercmids), SQL_PARAMS_NAMED, 'cmid');
+            $inparams['courseid'] = $courseid;
+            $rs = $DB->get_recordset_sql(
+                "SELECT DISTINCT userid, contextinstanceid
+                   FROM {logstore_standard_log}
+                  WHERE courseid = :courseid
+                    AND contextinstanceid $insql
+                    AND action IN ('submitted', 'viewed', 'attempted')",
+                $inparams
+            );
+            foreach ($rs as $r) {
+                if (isset($othercmids[$r->contextinstanceid])) {
+                    $gradeitemid = $othercmids[$r->contextinstanceid];
+                    $participatedbymodule[$gradeitemid][$r->userid] = true;
+                }
+            }
+            $rs->close();
+        }
+
+        // Consider graded by teacher.
+        foreach ($gradesbyuser as $userid => $usergrades) {
+            foreach ($usergrades as $gradeitemid => $grade) {
+                if ($grade !== null && isset($participatedbymodule[$gradeitemid])) {
+                    $participatedbymodule[$gradeitemid][$userid] = true;
+                }
+            }
+        }
+
+        return $participatedbymodule;
     }
 
     /**
@@ -206,15 +339,18 @@ class helper {
     /**
      * Format graded activities for external results.
      *
+     * @param int $courseid Course ID.
      * @param array $records Database records for graded activities.
      * @param array $gradesbyuser Nested array [userid][itemid] = finalgrade.
      * @param array $students Array of student records.
      * @return array List of formatted activities.
      */
-    public static function format_graded_activities_results($records, $gradesbyuser, $students) {
+    public static function format_graded_activities_results($courseid, $records, $gradesbyuser, $students) {
         global $DB;
         $results = [];
         $totalstudents = count($students);
+
+        $participatedbymodule = self::get_all_participated_users_in_course($courseid, $records, $gradesbyuser);
 
         foreach ($records as $r) {
             $name       = $r->itemname;
@@ -249,7 +385,7 @@ class helper {
             }
 
             $r->modname        = $r->itemmodule;
-            $participatedusers = self::get_participated_users($r, $gradesbyuser);
+            $participatedusers = $participatedbymodule[$r->gradeitemid] ?? [];
 
             // Hitung mahasiswa yang submit (pastikan ada di dalam array $students).
             $studentssubmitted = 0;

@@ -140,9 +140,9 @@ class get_inactive_students extends external_api {
         );
 
         $gradesall = $DB->get_records_sql(
-            "SELECT id, userid, itemid, finalgrade
+            "SELECT id, userid, itemid, COALESCE(finalgrade, rawgrade) AS finalgrade
                FROM {grade_grades}
-              WHERE itemid $gradeitemsql",
+              WHERE itemid $gradeitemsql AND (finalgrade IS NOT NULL OR rawgrade IS NOT NULL)",
             $gradeitemparams
         );
 
@@ -151,10 +151,7 @@ class get_inactive_students extends external_api {
             $gradesbyuser[$g->userid][$g->itemid] = $g->finalgrade;
         }
 
-        $participatedbymodule = [];
-        foreach ($gradedmodules as $module) {
-            $participatedbymodule[$module->gradeitemid] = helper::get_participated_users($module, $gradesbyuser);
-        }
+        $participatedbymodule = helper::get_all_participated_users_in_course($courseid, $gradedmodules, $gradesbyuser);
 
         // Filter inactive/ghost students.
         $inactivestudents = [];
@@ -177,7 +174,7 @@ class get_inactive_students extends external_api {
                     'firstname'              => $student->firstname,
                     'lastname'               => $student->lastname,
                     'email'                  => $student->email,
-                    'lastaccess'             => $lastaccesses[$uid]->timeaccess ?? null,
+                    'lastaccess'             => $lastaccesses[$uid]->timeaccess ?? 0,
                     'participatedactivities' => $gradedparticipated,
                     'totalactivities'        => $totalgradedactivities,
                     'participationrate'      => round($participationrate, 2),

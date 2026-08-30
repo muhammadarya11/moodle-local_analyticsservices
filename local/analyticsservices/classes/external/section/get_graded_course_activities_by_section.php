@@ -131,7 +131,7 @@ class get_graded_course_activities_by_section extends external_api {
             }
         }
 
-        $results = helper::format_graded_activities_results($records, $gradesbyuser, $students);
+        $results = helper::format_graded_activities_results($courseid, $records, $gradesbyuser, $students);
 
         return [
             'section' => [

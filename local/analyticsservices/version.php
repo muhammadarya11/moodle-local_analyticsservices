@@ -25,8 +25,8 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version = 20260721000;
-$plugin->release = '1.8';
+$plugin->version = 20260830000;
+$plugin->release = '1.9';
 $plugin->requires = 2024100700; // Requires Moodle 4.5.0.
 $plugin->component = 'local_analyticsservices';
 $plugin->maturity = MATURITY_STABLE;

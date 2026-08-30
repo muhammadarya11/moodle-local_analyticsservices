@@ -162,6 +162,8 @@ class get_underperforming_course_activities extends external_api {
         $underperformingactivities = [];
         $totalstudents             = count($students);
 
+        $participatedbymodule = helper::get_all_participated_users_in_course($courseid, $modules, $gradesbyuser);
+
         foreach ($modules as $module) {
             if ($module->modname === 'assign') {
                 $assign = $DB->get_record('assign', ['id' => $module->iteminstance], 'grade');
@@ -190,7 +192,7 @@ class get_underperforming_course_activities extends external_api {
                 }
             }
 
-            $participatedusers      = helper::get_participated_users($module, $gradesbyuser);
+            $participatedusers      = $participatedbymodule[$module->gradeitemid] ?? [];
             $studentssubmitted      = 0;
             $studentscompetent      = 0;
             $studentsactuallygraded = 0;
